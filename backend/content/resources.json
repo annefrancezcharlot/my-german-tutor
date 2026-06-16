@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "description": "Curated German learning resources. Add videos, texts, and audio items here.",
+  "items": [
+    {
+      "id": "dw_langsam_gesprochene_nachrichten",
+      "type": "audio",
+      "topic": "Nachrichten",
+      "level": "B2",
+      "title": "Langsam gesprochene Nachrichten",
+      "source": "Deutsche Welle",
+      "url": "https://learngerman.dw.com/de/langsam-gesprochene-nachrichten/s-60040332",
+      "description": "Aktuelle Nachrichten langsam gesprochen, gut fuer Hoerverstehen und Wortschatz.",
+      "focus": ["Hoerverstehen", "Nachrichtenwortschatz", "Politik"],
+      "vocabulary": ["die Regierung", "die Entscheidung", "berichten", "die Lage"],
+      "excerpt": "Nutze die aktuelle Folge als Grundlage. Hoere zuerst ohne Transkript und danach mit Transkript."
+    },
+    {
+      "id": "dw_top_thema",
+      "type": "text",
+      "topic": "Gesellschaft",
+      "level": "B2",
+      "title": "Top-Thema mit Vokabeln",
+      "source": "Deutsche Welle",
+      "url": "https://learngerman.dw.com/de/top-thema/s-55861562",
+      "description": "Kurze Texte zu aktuellen Themen mit Worterklaerungen und Aufgaben.",
+      "focus": ["Lesen", "Wortschatz", "Diskussion"],
+      "vocabulary": ["der Wandel", "die Herausforderung", "sich auswirken", "umstritten"],
+      "excerpt": "Waehle einen aktuellen Artikel und lies ihn zuerst einmal ohne Woerterbuch."
+    },
+    {
+      "id": "easy_german_street_interviews",
+      "type": "video",
+      "topic": "Alltag",
+      "level": "B1-B2",
+      "title": "Easy German Street Interviews",
+      "source": "Easy German",
+      "url": "https://www.youtube.com/@EasyGerman",
+      "description": "Strasseninterviews mit deutschen und englischen Untertiteln zu Alltagsthemen.",
+      "focus": ["Alltagssprache", "Hoerverstehen", "Meinungen ausdruecken"],
+      "vocabulary": ["meiner Meinung nach", "im Alltag", "zustimmen", "ablehnen"],
+      "excerpt": "Waehle ein Interview zu einem Thema, das dich interessiert, und notiere drei neue Ausdruecke."
+    }
+  ]
+}

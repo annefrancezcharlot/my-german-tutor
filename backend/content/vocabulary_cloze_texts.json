@@ -1,0 +1,631 @@
+{
+  "version": 1,
+  "exercise_type": "vocabulary_cloze",
+  "description": "Prewritten vocabulary gap-fill texts for preparation before a conversation or for standalone practice.",
+  "items": [
+    {
+      
+  "id": "social_interactions_communication_b2_1",
+  "topic_id": "social",
+  "topic_label": "Soziale Interaktionen",
+  "level": "B2",
+  "title": "Im Alltag richtig kommunizieren",
+  "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "Im Alltag ist es wichtig, andere Menschen freundlich zu [1]. Wenn man neu in einer Gruppe ist, kann man schnell neue Leute [2] oder sich von anderen [3] lassen. In vielen Situationen ist es auch noetig, aktiv [4], zum Beispiel wenn man Fragen hat. Gute Beziehungen entstehen, wenn Menschen einander [5] und offen miteinander sprechen. Manchmal muss man auch [6], wenn man etwas falsch gemacht hat. Gleichzeitig sollte man nicht vergessen, sich bei anderen zu [7], wenn sie einem geholfen haben.",
+  "word_bank": [
+    "begruessen",
+    "jemanden kennenlernen",
+    "bekannt machen",
+    "sich melden",
+    "vertrauen",
+    "sich entschuldigen",
+    "sich bedanken"
+  ],
+  "gaps": [
+    {
+      "id": 1,
+      "answer": "begruessen",
+      "hint": "jemanden am Anfang freundlich empfangen",
+      "lemma": "begruessen"
+    },
+    {
+      "id": 2,
+      "answer": "jemanden kennenlernen",
+      "hint": "eine Person zum ersten Mal treffen",
+      "lemma": "kennenlernen"
+    },
+    {
+      "id": 3,
+      "answer": "bekannt machen",
+      "hint": "zwei Personen einander vorstellen",
+      "lemma": "bekannt machen"
+    },
+    {
+      "id": 4,
+      "answer": "sich melden",
+      "hint": "aktiv Kontakt aufnehmen oder reagieren",
+      "lemma": "melden"
+    },
+    {
+      "id": 5,
+      "answer": "vertrauen",
+      "hint": "Glaube an Zuverlaessigkeit einer Person",
+      "lemma": "vertrauen"
+    },
+    {
+      "id": 6,
+      "answer": "sich entschuldigen",
+      "hint": "Bedauern fuer einen Fehler ausdruecken",
+      "lemma": "entschuldigen"
+    },
+    {
+      "id": 7,
+      "answer": "sich bedanken",
+      "hint": "Dank ausdruecken",
+      "lemma": "bedanken"
+    }
+  ]
+},
+    
+    {
+      "id": "social_interactions_help_b2_2",
+  "topic_id": "social",
+  "topic_label": "Soziale Interaktionen",
+  "level": "B2",
+  "title": "Hilfe im Alltag",
+  "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "In vielen Situationen muessen wir andere um Unterstuetzung bitten. Es ist wichtig, klar und freundlich [1]. Gleichzeitig kann man auch selbst aktiv [2], wenn man sieht, dass jemand Schwierigkeiten hat. Wenn man Hilfe bekommt, sollte man sich bedanken und angemessen [3]. Manche Menschen reagieren auch besonders positiv, wenn ihre Hilfe [4] wird. Gute Kommunikation erleichtert solche Situationen erheblich.",
+  "word_bank": [
+    "um Hilfe bitten",
+    "Hilfe anbieten",
+    "auf Dank reagieren",
+    "bejaht"
+  ],
+  "gaps": [
+    {
+      "id": 1,
+      "answer": "um Hilfe bitten",
+      "hint": "jemanden um Unterstuetzung fragen",
+      "lemma": "bitten"
+    },
+    {
+      "id": 2,
+      "answer": "Hilfe anbieten",
+      "hint": "Unterstuetzung von sich aus vorschlagen",
+      "lemma": "anbieten"
+    },
+    {
+      "id": 3,
+      "answer": "auf Dank reagieren",
+      "hint": "auf ein 'Danke' antworten",
+      "lemma": "reagieren"
+    },
+    {
+      "id": 4,
+      "answer": "bejaht",
+      "hint": "positiv beantwortet oder akzeptiert",
+      "lemma": "bejahen"
+    }
+  ]
+    },
+    {
+      "id": "social_interactions_contact_b2_3",
+  "topic_id": "social",
+  "topic_label": "Soziale Interaktionen",
+  "level": "B2",
+  "title": "Kontakte pflegen",
+  "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "Beruflich und privat ist es wichtig, neue Kontakte zu knuepfen. Oft muss man selbst aktiv werden und [1]. Danach kann man versuchen, den Kontakt weiter zu [2] und langfristig zu [3]. Manchmal entscheidet man sich aber auch bewusst dafuer, [4], wenn die Beziehung nicht mehr passt. Erfolgreiche Netzwerke basieren darauf, dass Menschen regelmaessig miteinander kommunizieren und sich austauschen.",
+  "word_bank": [
+    "den Kontakt zu jemanden aufnehmen",
+    "den Kontakt zu jemanden herstellen",
+    "den Kontakt zu jemanden aufrechthalten",
+    "den Kontakt abbrechen"
+  ],
+  "gaps": [
+    {
+      "id": 1,
+      "answer": "den Kontakt zu jemanden aufnehmen",
+      "hint": "erstmals Verbindung herstellen",
+      "lemma": "Kontakt aufnehmen"
+    },
+    {
+      "id": 2,
+      "answer": "den Kontakt zu jemanden herstellen",
+      "hint": "eine Verbindung aufbauen",
+      "lemma": "Kontakt herstellen"
+    },
+    {
+      "id": 3,
+      "answer": "den Kontakt zu jemanden aufrechthalten",
+      "hint": "Beziehung langfristig pflegen",
+      "lemma": "Kontakt aufrechthalten"
+    },
+    {
+      "id": 4,
+      "answer": "den Kontakt abbrechen",
+      "hint": "Beziehung beenden",
+      "lemma": "abbrechen"
+    }
+  ]
+    },
+    {
+      "id": "social_interactions_behavior_b2_4",
+  "topic_id": "social",
+  "topic_label": "Soziale Interaktionen",
+  "level": "B2",
+  "title": "Richtiges Verhalten in sozialen Situationen",
+  "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "In vielen Kulturen ist es ueblich, sich zur Begruessung die Hand zu [1] oder sich zu [2]. Wenn man sich gut kennt, kann man sich auch [3]. Bei Treffen arbeiten Menschen oft [4] oder [5] an Projekten. Wenn jemand einen Vorschlag macht, kann man diesen entweder [6] oder [7]. Wichtig ist dabei, respektvoll zu bleiben und andere nicht [8].",
+  "word_bank": [
+    "die Hand schuetteln",
+    "von jemandem verabschieden",
+    "umarmen",
+    "gemeinsam",
+    "zusammen",
+    "einen Vorschlag annehmen",
+    "einen Vorschlag ablehnen",
+    "jemanden falch anreden"
+  ],
+  "gaps": [
+    {
+      "id": 1,
+      "answer": "die Hand schuetteln",
+      "hint": "typische Begruessungsgeste",
+      "lemma": "Hand schuetteln"
+    },
+    {
+      "id": 2,
+      "answer": "von jemandem verabschieden",
+      "hint": "am Ende eines Treffens gehen",
+      "lemma": "verabschieden"
+    },
+    {
+      "id": 3,
+      "answer": "umarmen",
+      "hint": "jemanden in die Arme nehmen",
+      "lemma": "umarmen"
+    },
+    {
+      "id": 4,
+      "answer": "gemeinsam",
+      "hint": "miteinander",
+      "lemma": "gemeinsam"
+    },
+    {
+      "id": 5,
+      "answer": "zusammen",
+      "hint": "in einer Gruppe",
+      "lemma": "zusammen"
+    },
+    {
+      "id": 6,
+      "answer": "einen Vorschlag annehmen",
+      "hint": "zustimmen",
+      "lemma": "annehmen"
+    },
+    {
+      "id": 7,
+      "answer": "einen Vorschlag ablehnen",
+      "hint": "nicht zustimmen",
+      "lemma": "ablehnen"
+    },
+    {
+      "id": 8,
+      "answer": "jemanden falch anreden",
+      "hint": "falsche Anrede verwenden",
+      "lemma": "anreden"
+    }
+  ]
+    },
+    {
+      "id": "culture_berlin_festivals_b2_1",
+      "topic_id": "culture",
+      "topic_label": "Kultur",
+      "level": "B2",
+      "title": "Kulturleben in Berlin",
+      "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+      "preparation_use": true,
+      "standalone_use": true,
+      "source_text": "Berlin gilt seit Jahren als eines der wichtigsten [1] Zentren Europas. Besucherinnen und Besucher schaetzen vor allem die grosse [2] an Museen, Theatern und kleinen Galerien. Viele Veranstaltungen finden in ehemaligen Fabrikgebaeuden statt, was der Stadt eine besondere [3] verleiht. Im Sommer organisiert fast jeder Bezirk ein eigenes [4], bei dem Musik, Film und Literatur miteinander verbunden werden. Fuer viele Kuenstlerinnen und Kuenstler ist Berlin attraktiv, weil hier noch Raum fuer [5] Projekte existiert. Gleichzeitig wird oft darueber diskutiert, wie man Kultur fuer alle [6] machen kann. Eintrittspreise, Foerderprogramme und freie Proberaeume spielen dabei eine wichtige [7]. Auch die internationale [8] der Stadt beeinflusst das Kulturangebot stark: In vielen Programmen begegnet man mehreren Sprachen und unterschiedlichen Perspektiven. Wer in Berlin lebt, muss sich also kaum zwischen klassischer und moderner Kunst [9], sondern kann beides an einem Wochenende erleben. Gerade diese Mischung aus Tradition, [10] und staendigem Wandel macht fuer viele den besonderen [11] der Stadt aus.",
+      "word_bank": [
+        "kulturellen",
+        "Vielfalt",
+        "Atmosphaere",
+        "Festival",
+        "experimentelle",
+        "zugaenglich",
+        "Rolle",
+        "Praegung",
+        "entscheiden",
+        "Innovation",
+        "Reiz"
+      ],
+      "gaps": [
+        {
+          "id": 1,
+          "answer": "kulturellen",
+          "hint": "Adjektiv im Dativ Plural nach 'eines der wichtigsten ... Zentren'",
+          "lemma": "kulturell"
+        },
+        {
+          "id": 2,
+          "answer": "Vielfalt",
+          "hint": "grobe Breite des Angebots",
+          "lemma": "Vielfalt"
+        },
+        {
+          "id": 3,
+          "answer": "Atmosphaere",
+          "hint": "Stimmung oder Ausstrahlung eines Ortes",
+          "lemma": "Atmosphaere"
+        },
+        {
+          "id": 4,
+          "answer": "Festival",
+          "hint": "groesseres kulturelles Ereignis",
+          "lemma": "Festival"
+        },
+        {
+          "id": 5,
+          "answer": "experimentelle",
+          "hint": "nicht konventionell, kuenstlerisch riskant",
+          "lemma": "experimentell"
+        },
+        {
+          "id": 6,
+          "answer": "zugaenglich",
+          "hint": "leicht erreichbar oder nutzbar",
+          "lemma": "zugaenglich"
+        },
+        {
+          "id": 7,
+          "answer": "Rolle",
+          "hint": "feste Wendung: eine wichtige ... spielen",
+          "lemma": "Rolle"
+        },
+        {
+          "id": 8,
+          "answer": "Praegung",
+          "hint": "starker Einfluss auf Charakter oder Form",
+          "lemma": "Praegung"
+        },
+        {
+          "id": 9,
+          "answer": "entscheiden",
+          "hint": "Verb nach 'zwischen ... und ...'",
+          "lemma": "entscheiden"
+        },
+        {
+          "id": 10,
+          "answer": "Innovation",
+          "hint": "neue Idee oder Entwicklung",
+          "lemma": "Innovation"
+        },
+        {
+          "id": 11,
+          "answer": "Reiz",
+          "hint": "besondere Anziehungskraft",
+          "lemma": "Reiz"
+        }
+      ]
+    },
+    {
+      "id": "social_interactions_conflict_c1_5",
+  "topic_id": "social",
+  "topic_label": "Soziale Interaktionen",
+  "level": "C1",
+  "title": "Konflikte und Missverstaendnisse im Alltag",
+  "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "In sozialen Situationen kommt es immer wieder zu Missverstaendnissen, besonders wenn Menschen aus unterschiedlichen kulturellen Hintergruenden aufeinandertreffen. Ein typisches Problem entsteht, wenn man jemanden versehentlich [1], was schnell als unhoeflich wahrgenommen werden kann. In solchen Faellen ist es wichtig, sich sofort zu [2] und die Situation zu klaeren. Wenn die andere Person verstaendnisvoll reagiert, kann man sich anschliessend auch noch einmal bewusst [3], um die Beziehung zu stabilisieren. Schwieriger wird es jedoch, wenn das Vertrauen bereits beschaedigt ist und man nicht mehr bereit ist, einander zu [4].\n\nIn professionellen Kontexten ist es oft notwendig, aktiv [5], um Probleme fruehzeitig anzusprechen. Gleichzeitig sollte man offen dafuer sein, [6], wenn Kollegen Verbesserungsvorschlaege machen. Allerdings kommt es auch vor, dass man bewusst [7], wenn ein Vorschlag nicht umsetzbar erscheint. Entscheidend ist dabei die Art der Kommunikation.\n\nLangfristig zeigt sich, dass stabile Beziehungen davon abhaengen, ob Menschen bereit sind, regelmaessig [8] und den Austausch nicht abbrechen zu lassen. Wer sich komplett zurueckzieht und ploetzlich [9], riskiert, wichtige soziale Netzwerke zu verlieren.",
+  "word_bank": [
+    "jemanden falch anreden",
+    "sich entschuldigen",
+    "sich bedanken",
+    "vertrauen",
+    "sich melden",
+    "einen Vorschlag annehmen",
+    "einen Vorschlag ablehnen",
+    "den Kontakt zu jemanden aufrechthalten",
+    "den Kontakt abbrechen"
+  ],
+  "gaps": [
+    {
+      "id": 1,
+      "answer": "jemanden falch anreden",
+      "hint": "eine unpassende oder falsche Anrede verwenden",
+      "lemma": "anreden"
+    },
+    {
+      "id": 2,
+      "answer": "sich entschuldigen",
+      "hint": "Bedauern ausdruecken",
+      "lemma": "entschuldigen"
+    },
+    {
+      "id": 3,
+      "answer": "sich bedanken",
+      "hint": "Dank zeigen",
+      "lemma": "bedanken"
+    },
+    {
+      "id": 4,
+      "answer": "vertrauen",
+      "hint": "Glaube an Zuverlaessigkeit",
+      "lemma": "vertrauen"
+    },
+    {
+      "id": 5,
+      "answer": "sich melden",
+      "hint": "aktiv Kontakt aufnehmen",
+      "lemma": "melden"
+    },
+    {
+      "id": 6,
+      "answer": "einen Vorschlag annehmen",
+      "hint": "zustimmen",
+      "lemma": "annehmen"
+    },
+    {
+      "id": 7,
+      "answer": "einen Vorschlag ablehnen",
+      "hint": "nicht zustimmen",
+      "lemma": "ablehnen"
+    },
+    {
+      "id": 8,
+      "answer": "den Kontakt zu jemanden aufrechthalten",
+      "hint": "Beziehung pflegen",
+      "lemma": "aufrechthalten"
+    },
+    {
+      "id": 9,
+      "answer": "den Kontakt abbrechen",
+      "hint": "Beziehung beenden",
+      "lemma": "abbrechen"
+    }
+  ]
+    },
+    {
+      "id": "social_interactions_networking_c1_6",
+  "topic_id": "social",
+  "topic_label": "Soziale Interaktionen",
+  "level": "C1",
+  "title": "Netzwerken und Beziehungen aufbauen",
+  "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "Beim Netzwerken geht es nicht nur darum, moeglichst viele Menschen zu treffen, sondern auch darum, echte Beziehungen aufzubauen. Am Anfang steht oft die Herausforderung, aktiv [1] und erste Gespraeche zu fuehren. Dabei kann es hilfreich sein, wenn jemand einen [2] und so den Einstieg erleichtert. Wenn das erste Treffen gut verlaeuft, versuchen viele, schnell [3], um die Verbindung zu festigen.\n\nIn weiteren Begegnungen spielt auch die nonverbale Kommunikation eine Rolle: In manchen Kulturen ist es ueblich, sich zur Begruessung [4] oder sich sogar kurz zu [5]. Solche Gesten koennen dazu beitragen, Vertrauen aufzubauen.\n\nLangfristig erfolgreich ist jedoch nur, wer bereit ist, regelmaessig [6] und nicht nur in schwierigen Situationen [7]. Gleichzeitig sollte man offen dafuer sein, auch selbst [8] und andere zu unterstuetzen. Oft entstehen die besten Kooperationen, wenn Menschen bereit sind, Projekte [9] zu entwickeln und gemeinsam Ziele zu verfolgen.",
+  "word_bank": [
+    "den Kontakt zu jemanden aufnehmen",
+    "bekannt machen",
+    "sich melden",
+    "die Hand schuetteln",
+    "umarmen",
+    "den Kontakt zu jemanden aufrechthalten",
+    "um Hilfe bitten",
+    "Hilfe anbieten",
+    "gemeinsam"
+  ],
+  "gaps": [
+    {
+      "id": 1,
+      "answer": "den Kontakt zu jemanden aufnehmen",
+      "hint": "erste Verbindung herstellen",
+      "lemma": "Kontakt aufnehmen"
+    },
+    {
+      "id": 2,
+      "answer": "bekannt machen",
+      "hint": "zwei Personen einander vorstellen",
+      "lemma": "bekannt machen"
+    },
+    {
+      "id": 3,
+      "answer": "sich melden",
+      "hint": "nach einem Treffen wieder Kontakt aufnehmen",
+      "lemma": "melden"
+    },
+    {
+      "id": 4,
+      "answer": "die Hand schuetteln",
+      "hint": "typische Begruessungsgeste",
+      "lemma": "Hand schuetteln"
+    },
+    {
+      "id": 5,
+      "answer": "umarmen",
+      "hint": "koerperliche Begruessung",
+      "lemma": "umarmen"
+    },
+    {
+      "id": 6,
+      "answer": "den Kontakt zu jemanden aufrechthalten",
+      "hint": "Beziehung pflegen",
+      "lemma": "aufrechthalten"
+    },
+    {
+      "id": 7,
+      "answer": "um Hilfe bitten",
+      "hint": "Unterstuetzung erfragen",
+      "lemma": "bitten"
+    },
+    {
+      "id": 8,
+      "answer": "Hilfe anbieten",
+      "hint": "Unterstuetzung anbieten",
+      "lemma": "anbieten"
+    },
+    {
+      "id": 9,
+      "answer": "gemeinsam",
+      "hint": "zusammen mit anderen",
+      "lemma": "gemeinsam"
+    }
+  ]
+    },
+    {
+      "id": "work_new_work_b2_1",
+      "topic_id": "work",
+      "topic_label": "Arbeit",
+      "level": "B2",
+      "title": "Neue Arbeitswelten",
+      "instructions": "Setze die passenden Woerter aus der Wortliste in die nummerierten Luecken ein.",
+      "preparation_use": true,
+      "standalone_use": true,
+      "source_text": "In vielen Unternehmen hat sich die Arbeitswelt in den letzten Jahren deutlich [1]. Digitale Werkzeuge erleichtern die [2] zwischen Teams, die nicht am selben Ort arbeiten. Gleichzeitig erwarten viele Beschaeftigte heute mehr [3] bei Arbeitszeiten und Arbeitsort. Das klassische Buero ist deshalb nicht verschwunden, aber seine [4] hat sich veraendert: Es dient heute oft eher als Ort fuer Austausch, Kreativitaet und gemeinsame [5]. Fuer Fuehrungskraefte bedeutet das, dass sie Vertrauen staerker in den Mittelpunkt stellen muessen. Wer jede Kleinigkeit kontrollieren will, erzeugt schnell [6] statt Motivation. Auch die Frage nach einer gesunden [7] zwischen Beruf und Privatleben ist wichtiger geworden. Viele Firmen investieren deshalb in Programme zur [8], damit Mitarbeitende langfristig leistungsfaehig bleiben. Kritiker weisen jedoch darauf hin, dass nicht jede Taetigkeit fuer mobiles Arbeiten [9] ist. In Produktion, Pflege oder Gastronomie gelten andere [10]. Trotzdem zeigt die Entwicklung, dass moderne Arbeit mehr [11] und Eigenverantwortung verlangt als frueher.",
+      "word_bank": [
+        "veraendert",
+        "Zusammenarbeit",
+        "Flexibilitaet",
+        "Funktion",
+        "Praesenz",
+        "Misstrauen",
+        "Balance",
+        "Gesundheit",
+        "geeignet",
+        "Rahmenbedingungen",
+        "Selbstorganisation"
+      ],
+      "gaps": [
+        {
+          "id": 1,
+          "answer": "veraendert",
+          "hint": "Partizip II nach 'hat sich ...'",
+          "lemma": "veraendern"
+        },
+        {
+          "id": 2,
+          "answer": "Zusammenarbeit",
+          "hint": "gemeinsames Arbeiten im Team",
+          "lemma": "Zusammenarbeit"
+        },
+        {
+          "id": 3,
+          "answer": "Flexibilitaet",
+          "hint": "Anpassungsfaehigkeit bei Zeit und Ort",
+          "lemma": "Flexibilitaet"
+        },
+        {
+          "id": 4,
+          "answer": "Funktion",
+          "hint": "Aufgabe oder Zweck",
+          "lemma": "Funktion"
+        },
+        {
+          "id": 5,
+          "answer": "Praesenz",
+          "hint": "physisches Vor-Ort-Sein",
+          "lemma": "Praesenz"
+        },
+        {
+          "id": 6,
+          "answer": "Misstrauen",
+          "hint": "Gegenteil von Vertrauen",
+          "lemma": "Misstrauen"
+        },
+        {
+          "id": 7,
+          "answer": "Balance",
+          "hint": "feste Wendung mit Beruf und Privatleben",
+          "lemma": "Balance"
+        },
+        {
+          "id": 8,
+          "answer": "Gesundheit",
+          "hint": "koerperliches und psychisches Wohlbefinden",
+          "lemma": "Gesundheit"
+        },
+        {
+          "id": 9,
+          "answer": "geeignet",
+          "hint": "passend oder tauglich",
+          "lemma": "geeignet"
+        },
+        {
+          "id": 10,
+          "answer": "Rahmenbedingungen",
+          "hint": "aussere Voraussetzungen",
+          "lemma": "Rahmenbedingung"
+        },
+        {
+          "id": 11,
+          "answer": "Selbstorganisation",
+          "hint": "Faehigkeit, die eigene Arbeit selbst zu strukturieren",
+          "lemma": "Selbstorganisation"
+        }
+      ]
+    },
+    {
+  "id": "social_competence_complete_c1_1",
+  "topic_id": "communication",
+  "topic_label": "Kommunikation",
+  "level": "C1",
+  "title": "Die Kunst der Zwischenmenschlichen Beziehungen",
+  "instructions": "Setze alle passenden Woerter aus der Wortliste in die nummerierten Luecken ein. Achte auf die korrekte Grammatik und den Kontext.",
+  "preparation_use": true,
+  "standalone_use": true,
+  "source_text": "In der Welt des Networkings ist der erste Eindruck entscheidend. Wenn Sie einen Raum betreten, sollten Sie die Anwesenden freundlich [1]. In einem formellen Rahmen ist es ueblich, dass man sich [2], waehrend man sich im privaten Kreis oft herzlich [3]. Es gilt als Fauxpas, wenn man [4], da dies Desinteresse signalisiert. Sollten Sie jemanden noch nicht kennen, koennen Sie einen Dritten bitten, Sie mit der Person [5], oder Sie versuchen selbst, [6]. Sobald man sich im Gespraech befindet, ist es ein Zeichen von Souveraenitaet, wenn man aktiv [7], falls man eine Information benoetigt. Ebenso wichtig ist es, im richtigen Moment seine [8]. \n\nEin guter Kommunikator versteht es, [9] und hoeflich [10], ohne arrogant zu wirken. Falls ein Fehler unterläuft, sollte man nicht zoegern und [11]. In Verhandlungen ist Fingerspitzengefuehl gefragt: Man kann [12], wenn die Konditionen stimmen, oder [13], wenn die Erwartungen nicht erfuellt werden. Wird eine Entscheidung positiv getroffen, wird sie oft von allen Beteiligten [14]. Um langfristig erfolgreich zu sein, muss man [15], damit eine stabile Basis entsteht. Es reicht nicht, nur einmalig [16], sondern man muss aktiv [17], um nicht in Vergessenheit zu geraten. Werden Aufgaben [18] oder [19] geloest, staerkt dies den Teamgeist. \n\nDennoch gibt es Situationen, in denen man [20] muss, wenn eine Zusammenarbeit nicht mehr fruchtbar ist. Bevor man sich jedoch endgueltig [21], sollte man sich fuer die gemeinsame Zeit [22]. Ein professionelles Verhalten zeichnet sich dadurch aus, dass man sich auch nach einer Trennung korrekt verhaelt und sich bei Bedarf wieder [23], falls sich neue Chancen ergeben.",
+  "word_bank": [
+    "begrüssen",
+    "die Hand schütteln",
+    "umarmen",
+    "jemanden falch anreden",
+    "bekannt machen",
+    "jemanden kennenlernen",
+    "um Hilfe bitten",
+    "Hilfe anbieten",
+    "sich bedanken",
+    "auf Dank reagieren",
+    "sich entschuldigen",
+    "einen Vorschlag annehmen",
+    "einen Vorschlag ablehnen",
+    "bejaht",
+    "vertrauen",
+    "den Kontakt zu jemanden aufnehmen",
+    "den Kontakt zu jemanden aufrechthalten",
+    "gemeinsam",
+    "zusammen",
+    "den Kontakt abbrechen",
+    "von jemandem verabschieden",
+    "sich bedanken",
+    "sich melden"
+  ],
+  "gaps": [
+    { "id": 1, "answer": "begrüssen", "hint": "Infinitiv: Willkommen heissen", "lemma": "begrüssen" },
+    { "id": 2, "answer": "die Hand schütteln", "hint": "Infinitiv: Formelle Geste", "lemma": "die Hand schütteln" },
+    { "id": 3, "answer": "umarmen", "hint": "Infinitiv: Informelle, herzliche Geste", "lemma": "umarmen" },
+    { "id": 4, "answer": "jemanden falch anreden", "hint": "Infinitiv: Falschen Namen/Titel nutzen", "lemma": "jemanden falch anreden" },
+    { "id": 5, "answer": "bekannt machen", "hint": "Infinitiv: Vorstellen durch Dritte", "lemma": "bekannt machen" },
+    { "id": 6, "answer": "jemanden kennenlernen", "hint": "Infinitiv: Ersten Kontakt herstellen", "lemma": "jemanden kennenlernen" },
+    { "id": 7, "answer": "um Hilfe bitten", "hint": "Infinitiv: Unterstuetzung suchen", "lemma": "um Hilfe bitten" },
+    { "id": 8, "answer": "Hilfe anbieten", "hint": "Infinitiv: Unterstuetzung vorschlagen", "lemma": "Hilfe anbieten" },
+    { "id": 9, "answer": "sich bedanken", "hint": "Infinitiv: Dank ausdruecken", "lemma": "sich bedanken" },
+    { "id": 10, "answer": "auf Dank reagieren", "hint": "Infinitiv: Antwort auf 'Danke'", "lemma": "auf Dank reagieren" },
+    { "id": 11, "answer": "sich entschuldigen", "hint": "Infinitiv: Um Verzeihung bitten", "lemma": "sich entschuldigen" },
+    { "id": 12, "answer": "einen Vorschlag annehmen", "hint": "Infinitiv: Zustimmen", "lemma": "einen Vorschlag annehmen" },
+    { "id": 13, "answer": "einen Vorschlag ablehnen", "hint": "Infinitiv: Nein sagen", "lemma": "einen Vorschlag ablehnen" },
+    { "id": 14, "answer": "bejaht", "hint": "Partizip II: Bestaetigt", "lemma": "bejahen" },
+    { "id": 15, "answer": "vertrauen", "hint": "Infinitiv: Glauben an die Redlichkeit", "lemma": "vertrauen" },
+    { "id": 16, "answer": "den Kontakt zu jemanden aufnehmen", "hint": "Infinitiv: Erstmalige Verbindung", "lemma": "den Kontakt zu jemanden aufnehmen" },
+    { "id": 17, "answer": "den Kontakt zu jemanden aufrechthalten", "hint": "Infinitiv: Verbindung pflegen", "lemma": "den Kontakt zu jemanden aufrechthalten" },
+    { "id": 18, "answer": "gemeinsam", "hint": "Adjektiv/Adverb: Nicht allein", "lemma": "gemeinsam" },
+    { "id": 19, "answer": "zusammen", "hint": "Adverb: Kooperativ", "lemma": "zusammen" },
+    { "id": 20, "answer": "den Kontakt abbrechen", "hint": "Infinitiv: Verbindung beenden", "lemma": "den Kontakt abbrechen" },
+    { "id": 21, "answer": "von jemandem verabschieden", "hint": "Reflexives Verb: 'Tschuess' sagen", "lemma": "von jemandem verabschieden" },
+    { "id": 22, "answer": "sich bedanken", "hint": "Wiederholung zur Festigung", "lemma": "sich bedanken" },
+    { "id": 23, "answer": "sich melden", "hint": "Infinitiv: Kontaktieren", "lemma": "sich melden" }
+  ]
+}
+  ]
+}

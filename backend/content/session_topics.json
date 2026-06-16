@@ -1,0 +1,500 @@
+[
+  {
+    "id": "politics",
+    "category": "Society",
+    "title": "Swiss Politics & Democracy",
+    "description": "Discuss the Bundesrat, political parties, and current affairs.",
+    "conversation_starters": [
+      {
+        "id": "direct-democracy",
+        "title": "Direct democracy in everyday life",
+        "prompt": "Wie viel direkte Demokratie ist sinnvoll? Sprich ueber Volksabstimmungen, politische Beteiligung und moegliche Nachteile."
+      },
+      {
+        "id": "party-landscape",
+        "title": "Political parties and coalitions",
+        "prompt": "Welche Rolle spielen politische Parteien heute noch? Vergleiche Parteiprofile, Kompromisse und Regierungsbildung."
+      },
+      {
+        "id": "federal-council",
+        "title": "The Bundesrat model",
+        "prompt": "Ist ein kollektives Regierungsmodell wie der Bundesrat moderner als ein klassisches Kanzlersystem? Begruende deine Meinung."
+      }
+    ]
+  },
+  {
+    "id": "philosophy",
+    "category": "Culture",
+    "title": "Philosophy & Ethics",
+    "description": "Explore Kant, Nietzsche, and modern ethical dilemmas.",
+    "conversation_starters": [
+      {
+        "id": "ai-ethics",
+        "title": "AI and moral responsibility",
+        "prompt": "Wer traegt Verantwortung, wenn KI Schaden verursacht: Entwickler, Nutzer oder Unternehmen? Diskutiere ethische Perspektiven."
+      },
+      {
+        "id": "kant-today",
+        "title": "Is Kant still relevant?",
+        "prompt": "Sind Kants Ideen ueber Pflicht und Moral noch alltagstauglich? Nutze Beispiele aus Beruf oder Privatleben."
+      },
+      {
+        "id": "happiness-vs-duty",
+        "title": "Happiness or duty",
+        "prompt": "Was ist wichtiger: persoenliches Glueck oder moralische Pflicht? Begruende deine Position mit konkreten Situationen."
+      }
+    ]
+  },
+  {
+    "id": "climate",
+    "category": "Science",
+    "title": "Climate Change & Environment",
+    "description": "Debate renewable energy, policy, and personal responsibility.",
+    "conversation_starters": [
+      {
+        "id": "individual-action",
+        "title": "Personal responsibility",
+        "prompt": "Wie viel kann der Einzelne wirklich fuer den Klimaschutz tun? Sprich ueber Konsum, Mobilitaet und Grenzen individueller Entscheidungen."
+      },
+      {
+        "id": "energy-transition",
+        "title": "Renewables and realism",
+        "prompt": "Ist die Energiewende vor allem ein technisches oder ein politisches Problem? Diskutiere Kosten, Infrastruktur und Akzeptanz."
+      },
+      {
+        "id": "climate-justice",
+        "title": "Climate justice",
+        "prompt": "Sollten Industrielaender mehr Verantwortung fuer Klimafolgen uebernehmen? Begruende deine Sicht international."
+      }
+    ]
+  },
+  {
+    "id": "literature",
+    "category": "Culture",
+    "title": "German Literature",
+    "description": "Discuss Goethe, Kafka, Boell, and contemporary authors.",
+    "conversation_starters": [
+      {
+        "id": "classics-vs-modern",
+        "title": "Classics versus contemporary books",
+        "prompt": "Warum lesen viele Menschen lieber moderne Romane als Klassiker? Vergleiche Sprache, Themen und Relevanz."
+      },
+      {
+        "id": "kafka-modernity",
+        "title": "Kafka in the modern world",
+        "prompt": "Warum wirkt Kafka heute noch aktuell? Sprich ueber Entfremdung, Buero kratie und modernen Leistungsdruck."
+      },
+      {
+        "id": "literature-empathy",
+        "title": "Can literature build empathy?",
+        "prompt": "Hilft Literatur dabei, andere Lebensrealitaeten besser zu verstehen? Begruende deine Meinung mit Beispielen."
+      }
+    ]
+  },
+  {
+    "id": "economy",
+    "category": "Society",
+    "title": "Economics & Labour Market",
+    "description": "Analyse Germany's economy, Kurzarbeit, and globalisation.",
+    "conversation_starters": [
+      {
+        "id": "four-day-week",
+        "title": "The four-day week",
+        "prompt": "Ist die Vier-Tage-Woche ein realistisches Modell fuer die Zukunft? Diskutiere Produktivitaet, Motivation und Branchenunterschiede."
+      },
+      {
+        "id": "globalisation",
+        "title": "Winners and losers of globalisation",
+        "prompt": "Wer profitiert am meisten von der Globalisierung und wer verliert? Begruende deine Einschaetzung."
+      },
+      {
+        "id": "automation-jobs",
+        "title": "Automation and jobs",
+        "prompt": "Veraendert Automatisierung vor allem einfache oder qualifizierte Berufe? Sprich ueber Chancen und Risiken."
+      }
+    ]
+  },
+  {
+    "id": "technology",
+    "category": "Science",
+    "title": "Technology & AI",
+    "description": "Debate digitisation, AI ethics, and the future of work.",
+    "conversation_starters": [
+      {
+        "id": "ai-work",
+        "title": "AI at work",
+        "prompt": "Sollten Unternehmen KI breit im Arbeitsalltag einsetzen? Diskutiere Effizienz, Qualitaet und moegliche Nebenwirkungen."
+      },
+      {
+        "id": "digital-state",
+        "title": "Digital public services",
+        "prompt": "Warum scheitert digitale Verwaltung oft an kleinen Dingen? Sprich ueber Prozesse, Datenschutz und Nutzerfreundlichkeit."
+      },
+      {
+        "id": "human-skills",
+        "title": "Human skills in the AI era",
+        "prompt": "Welche Faehigkeiten werden in einer KI-gepraegten Zukunft besonders wichtig? Begruende deine Auswahl."
+      }
+    ]
+  },
+  {
+    "id": "history",
+    "category": "Culture",
+    "title": "German History & Memory",
+    "description": "Reflect on WWII, the Wende, and historical responsibility.",
+    "conversation_starters": [
+      {
+        "id": "memory-culture",
+        "title": "Culture of remembrance",
+        "prompt": "Wie sollte Erinnerungskultur heute aussehen? Diskutiere Denkmaeler, Unterricht und digitale Formate."
+      },
+      {
+        "id": "east-west",
+        "title": "East and West after reunification",
+        "prompt": "Welche Unterschiede zwischen Ost und West spuert man heute noch? Begruende deine Sicht sozial und politisch."
+      },
+      {
+        "id": "history-identity",
+        "title": "History and national identity",
+        "prompt": "Wie stark sollte Geschichte das heutige Selbstbild eines Landes praegen? Sprich ueber Verantwortung und Zukunft."
+      }
+    ]
+  },
+  {
+    "id": "travel",
+    "category": "Lifestyle",
+    "title": "Travel & Regional Diversity",
+    "description": "Explore German regions, dialects, and travel experiences.",
+    "conversation_starters": [
+      {
+        "id": "hidden-regions",
+        "title": "Underrated regions",
+        "prompt": "Welche deutschsprachige Region ist unterschaetzt und warum? Beschreibe Landschaft, Kultur und Alltag."
+      },
+      {
+        "id": "dialects",
+        "title": "Dialects while travelling",
+        "prompt": "Sind Dialekte eher eine kulturelle Bereicherung oder ein Kommunikationsproblem? Nutze Reisebeispiele."
+      },
+      {
+        "id": "slow-travel",
+        "title": "Slow travel versus city trips",
+        "prompt": "Was lernt man auf langsamen Reisen besser als bei kurzen Staedtetrips? Vergleiche beide Reiseformen."
+      }
+    ]
+  },
+  {
+    "id": "art",
+    "category": "Culture",
+    "title": "Contemporary Art & Music",
+    "description": "Discuss German art movements, Berlin's music scene, and more.",
+    "conversation_starters": [
+      {
+        "id": "public-funding",
+        "title": "Should art be publicly funded?",
+        "prompt": "Sollte der Staat experimentelle Kunst foerdern, auch wenn sie nur wenige Menschen anspricht? Begruende deine Meinung."
+      },
+      {
+        "id": "music-scenes",
+        "title": "Local music scenes",
+        "prompt": "Warum entstehen kreative Musikszenen oft in bestimmten Staedten? Sprich ueber Mieten, Freiraeume und Netzwerke."
+      },
+      {
+        "id": "art-provocation",
+        "title": "When art provokes",
+        "prompt": "Muss gute Kunst provozieren oder darf sie einfach schoen sein? Diskutiere verschiedene Kunstverstaendnisse."
+      }
+    ]
+  },
+  {
+    "id": "health",
+    "category": "Lifestyle",
+    "title": "Health & Well-being",
+    "description": "Talk about the healthcare system and wellness culture.",
+    "conversation_starters": [
+      {
+        "id": "preventive-care",
+        "title": "Prevention versus treatment",
+        "prompt": "Warum investieren Gesundheitssysteme oft mehr in Behandlung als in Praevention? Diskutiere Ursachen und Folgen."
+      },
+      {
+        "id": "mental-health",
+        "title": "Mental health in daily life",
+        "prompt": "Wird psychische Gesundheit heute offener diskutiert als frueher? Begruende deine Beobachtungen."
+      },
+      {
+        "id": "wellness-industry",
+        "title": "Wellness or marketing",
+        "prompt": "Wie sinnvoll ist die boomende Wellness-Industrie wirklich? Sprich ueber Nutzen, Trends und uebertriebene Versprechen."
+      }
+    ]
+  },
+  {
+    "id": "education",
+    "category": "Society",
+    "title": "Education & University Life",
+    "description": "Compare educational systems and discuss Numerus Clausus.",
+    "conversation_starters": [
+      {
+        "id": "equal-opportunity",
+        "title": "Equal opportunities in education",
+        "prompt": "Wie gerecht ist Bildung wirklich? Diskutiere soziale Herkunft, Foerderung und strukturelle Huerden."
+      },
+      {
+        "id": "nc-debate",
+        "title": "The Numerus Clausus debate",
+        "prompt": "Ist der Numerus Clausus ein fairer Auswahlmechanismus? Begruende deine Position mit Vor- und Nachteilen."
+      },
+      {
+        "id": "university-purpose",
+        "title": "What is university for?",
+        "prompt": "Soll die Universitaet vor allem auf den Arbeitsmarkt vorbereiten oder breiter bilden? Diskutiere beides."
+      }
+    ]
+  },
+  {
+    "id": "media",
+    "category": "Society",
+    "title": "Media & Fake News",
+    "description": "Analyse journalism, public broadcasting, social media, and misinformation.",
+    "conversation_starters": [
+      {
+        "id": "trust-journalism",
+        "title": "Trust in journalism",
+        "prompt": "Warum vertrauen manche Menschen klassischen Medien immer weniger? Diskutiere Gruende und Gegenstrategien."
+      },
+      {
+        "id": "social-algorithms",
+        "title": "Algorithms and opinion",
+        "prompt": "Wie stark beeinflussen soziale Netzwerke unsere politische Wahrnehmung? Begruende deine Einschaetzung."
+      },
+      {
+        "id": "public-broadcasting",
+        "title": "Public broadcasting today",
+        "prompt": "Braucht man heute noch oeffentlich-rechtliche Medien? Sprich ueber Auftrag, Finanzierung und Konkurrenz."
+      }
+    ]
+  },
+  {
+    "id": "food",
+    "category": "Lifestyle",
+    "title": "The Wurst & Beyond",
+    "description": "Discuss food culture, rituals, and changing eating habits.",
+    "conversation_starters": [
+      {
+        "id": "meat-alternatives",
+        "title": "Meat alternatives",
+        "prompt": "Warum loesen vegane Ersatzprodukte oft starke Debatten aus? Diskutiere Sprache, Identitaet und Konsum."
+      },
+      {
+        "id": "food-tradition",
+        "title": "Tradition on the plate",
+        "prompt": "Wie viel Tradition braucht Esskultur? Vergleiche klassische Gerichte mit modernen Ernaehrungstrends."
+      },
+      {
+        "id": "after-work-rituals",
+        "title": "After-work rituals",
+        "prompt": "Welche Rolle spielen gemeinsame Essens- oder Feierabendrituale fuer soziale Beziehungen? Begruende deine Sicht."
+      }
+    ]
+  },
+  {
+    "id": "leisure",
+    "category": "Lifestyle",
+    "title": "Vereinskultur & Hobbies",
+    "description": "Talk about clubs, hobbies, and organised free time.",
+    "conversation_starters": [
+      {
+        "id": "club-culture",
+        "title": "Why clubs matter",
+        "prompt": "Warum treten Menschen Vereinen bei, obwohl sie online Kontakte finden koennen? Diskutiere Gemeinschaft und Verbindlichkeit."
+      },
+      {
+        "id": "niche-hobbies",
+        "title": "The appeal of niche hobbies",
+        "prompt": "Warum werden ungewoehnliche Hobbys fuer viele Menschen so wichtig? Begruende deine Meinung."
+      },
+      {
+        "id": "free-time-pressure",
+        "title": "Performance pressure in leisure time",
+        "prompt": "Ist Freizeit heute wirklich frei oder ebenfalls von Leistungsdruck gepraegt? Vergleiche unterschiedliche Lebensstile."
+      }
+    ]
+  },
+  {
+    "id": "sunday",
+    "category": "Culture",
+    "title": "The Sacred Quiet of Sunday",
+    "description": "Debate the Sonntagsruhe and the value of collective rest.",
+    "conversation_starters": [
+      {
+        "id": "rest-day",
+        "title": "A shared day of rest",
+        "prompt": "Ist ein gemeinsamer ruhiger Sonntag gut fuer die Gesellschaft? Sprich ueber Familie, Erholung und Freiheit."
+      },
+      {
+        "id": "retail-opening",
+        "title": "Sunday shopping",
+        "prompt": "Sollten Geschaefte sonntags regulaer oeffnen duerfen? Begruende deine Meinung wirtschaftlich und sozial."
+      },
+      {
+        "id": "urban-noise",
+        "title": "Quiet rules in cities",
+        "prompt": "Wie sinnvoll sind strenge Regeln zu Laerm und Ruhezeiten in staedtischen Gebieten? Diskutiere Lebensqualitaet und Konflikte."
+      }
+    ]
+  },
+  {
+    "id": "sports",
+    "category": "Lifestyle",
+    "title": "Beyond the Bundesliga",
+    "description": "Explore niche sports, fan culture, and new formats.",
+    "conversation_starters": [
+      {
+        "id": "niche-sports",
+        "title": "The rise of niche sports",
+        "prompt": "Warum gewinnen kleinere Sportarten ploetzlich Aufmerksamkeit? Diskutiere Medien, Events und Community."
+      },
+      {
+        "id": "fan-culture",
+        "title": "Healthy fan culture",
+        "prompt": "Was macht gute Fankultur aus und wo beginnt problematisches Verhalten? Begruende deine Sicht."
+      },
+      {
+        "id": "new-leagues",
+        "title": "Entertainment versus tradition",
+        "prompt": "Sind neue, schnellere Sportformate eine Bereicherung oder bedrohen sie traditionelle Wettbewerbe? Diskutiere beides."
+      }
+    ]
+  },
+  {
+    "id": "festivals",
+    "category": "Culture",
+    "title": "Feasts & Folklore",
+    "description": "Discuss Carnival, Christmas markets, and seasonal rituals.",
+    "conversation_starters": [
+      {
+        "id": "christmas-markets",
+        "title": "The Christmas market phenomenon",
+        "prompt": "Warum sind Weihnachtsmaerkte fuer viele mehr als nur Touristenattraktionen? Beschreibe Atmosphaere und Bedeutung."
+      },
+      {
+        "id": "carnival",
+        "title": "Carnival and identity",
+        "prompt": "Welche Funktion haben Feste wie Karneval fuer regionale Identitaet und gesellschaftliche Entlastung?"
+      },
+      {
+        "id": "seasonal-rituals",
+        "title": "Why seasonal rituals survive",
+        "prompt": "Warum halten sich saisonale Rituale auch in modernen Gesellschaften so hartnaeckig? Begruende deine Antwort."
+      }
+    ]
+  },
+  {
+    "id": "pets",
+    "category": "Lifestyle",
+    "title": "Dog-Friendly Deutschland",
+    "description": "Discuss pets in public life and social expectations.",
+    "conversation_starters": [
+      {
+        "id": "dogs-public",
+        "title": "Dogs in public spaces",
+        "prompt": "Sollten Hunde in Restaurants, Bueros oder Geschaeften selbstverstaendlich sein? Diskutiere Komfort, Hygiene und Ruecksicht."
+      },
+      {
+        "id": "pet-responsibility",
+        "title": "Responsibility of pet owners",
+        "prompt": "Welche Pflichten haben Tierhalter gegenueber der Gesellschaft? Sprich ueber Kosten, Regeln und Verhalten."
+      },
+      {
+        "id": "city-pets",
+        "title": "Pets in urban life",
+        "prompt": "Ist das Leben in der Stadt fuer Hunde und andere Haustiere geeignet? Begruende deine Meinung."
+      }
+    ]
+  },
+  {
+    "id": "humour",
+    "category": "Culture",
+    "title": "The German Humor Myth",
+    "description": "Talk about satire, stereotypes, and cultural humour.",
+    "conversation_starters": [
+      {
+        "id": "stereotypes",
+        "title": "National humour stereotypes",
+        "prompt": "Warum halten sich Klischees ueber nationalen Humor so lange? Diskutiere Wahrnehmung, Medien und Missverstaendnisse."
+      },
+      {
+        "id": "satire-limits",
+        "title": "Limits of satire",
+        "prompt": "Darf Satire alles oder braucht sie klare Grenzen? Begruende deine Position mit Beispielen."
+      },
+      {
+        "id": "dry-humor",
+        "title": "Dry humour in daily life",
+        "prompt": "Warum wird trockener Humor oft uebersehen? Sprich ueber Tonfall, Kontext und kulturelle Unterschiede."
+      }
+    ]
+  },
+  {
+    "id": "work",
+    "category": "Lifestyle",
+    "title": "New Work & Digital Nomads",
+    "description": "Discuss remote work, flexibility, and changing office culture.",
+    "conversation_starters": [
+      {
+        "id": "remote-work",
+        "title": "Remote work and team culture",
+        "prompt": "Verbessert Remote-Arbeit die Lebensqualitaet oder schadet sie langfristig der Zusammenarbeit? Diskutiere Vor- und Nachteile."
+      },
+      {
+        "id": "workations",
+        "title": "Workations",
+        "prompt": "Sind Workations ein echter Fortschritt oder nur ein Privileg fuer wenige? Begruende deine Meinung."
+      },
+      {
+        "id": "office-future",
+        "title": "The future of the office",
+        "prompt": "Welche Funktion wird das Buero in Zukunft noch haben? Sprich ueber Konzentration, Begegnung und Unternehmenskultur."
+      }
+    ]
+  },
+  {
+     "id": "social_interactions",
+  "category": "Lifestyle",
+  "title": "Social Interactions",
+  "description": "Discuss communication, relationships, and everyday behavior.",
+  "conversation_starters": [
+    {
+      "id": "first-impressions",
+      "title": "First impressions",
+      "prompt": "Wie wichtig ist der erste Eindruck beim Kennenlernen? Kann man ihn spaeter korrigieren?"
+    },
+    {
+      "id": "helping-others",
+      "title": "Helping in everyday life",
+      "prompt": "Wann sollte man anderen Hilfe anbieten und wann eher warten, bis man gefragt wird?"
+    },
+    {
+      "id": "apologies",
+      "title": "Apologizing",
+      "prompt": "Was macht eine gute Entschuldigung aus? Gibt es Situationen, in denen eine Entschuldigung nicht ausreicht?"
+    },
+    {
+      "id": "keeping-contact",
+      "title": "Keeping in touch",
+      "prompt": "Wie kann man langfristig Kontakt zu anderen aufrechterhalten, besonders ueber Distanz?"
+    },
+    {
+      "id": "nonverbal-communication",
+      "title": "Body language",
+      "prompt": "Welche Rolle spielen Gesten wie Haendedruck oder Umarmungen in verschiedenen Kulturen?"
+    },
+    {
+      "id": "accepting-refusing",
+      "title": "Accepting or refusing suggestions",
+      "prompt": "Wie kann man einen Vorschlag hoeflich ablehnen, ohne die Beziehung zu belasten?"
+    }
+  ]
+  }
+]
