@@ -1,16 +1,18 @@
-### `backend/services/exercise_engine.py`
-
-
-from typing import List, Dict, Any, Optional
-from uuid import UUID
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-import models
-from services.claude_service import classify_exercise_topic, generate_exercise
+import logging
 import random
 import json
-from pathlib import Path
 import re
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
+import models
+from services.claude_service import classify_exercise_topic, generate_exercise
+
+logger = logging.getLogger(__name__)
 
 EXERCISE_TYPES = ["fill_blank", "correction", "multiple_choice", "translation", "vocabulary_cloze"]
 VOCABULARY_CLOZE_LIBRARY_PATH = (
@@ -341,7 +343,12 @@ def create_exercises_for_user(
             categories = [{"category": topic_classification["category"], "count": 0}]
             topic_subcategory = topic_classification.get("subcategory")
         except Exception as e:
-            print(f"Exercise topic classification failed for {topic_focus}: {e}")
+            logger.warning(
+                "exercise.topic_classification_failed user_id=%s topic_chars=%s error_type=%s",
+                user_id,
+                len(topic_focus),
+                type(e).__name__,
+            )
             categories = [{"category": "grammar", "count": 0}]
     else:
         categories = get_weak_categories(db, user_id, limit=count)
@@ -407,7 +414,13 @@ def create_exercises_for_user(
                 exercise_topic=topic_focus,
             )
         except Exception as e:
-            print(f"Exercise generation failed for {category}: {e}")
+            logger.warning(
+                "exercise.generation_failed user_id=%s category=%s exercise_type=%s error_type=%s",
+                user_id,
+                category,
+                exercise_type,
+                type(e).__name__,
+            )
             continue
 
         db_exercise = models.Exercise(

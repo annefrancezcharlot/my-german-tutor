@@ -488,8 +488,8 @@ def _fallback_chat_data(raw_text: str) -> Dict[str, Any]:
     reply = _extract_json_string_field(raw_text, "reply")
     if not reply:
         logger.warning(
-            "claude.chat.json_parse_failed_no_reply raw_preview=%r",
-            raw_text[:1000],
+            "claude.chat.json_parse_failed_no_reply raw_chars=%s",
+            len(raw_text),
         )
         reply = (
             "Entschuldige, ich hatte gerade ein technisches Problem mit meiner Antwort. "
@@ -572,9 +572,9 @@ def get_chat_response(
         data = _load_jsonish_object(raw_text)
     except json.JSONDecodeError as exc:
         logger.warning(
-            "claude.chat.json_parse_failed error=%s raw_preview=%r",
+            "claude.chat.json_parse_failed error=%s raw_chars=%s",
             exc,
-            raw_text[:1000],
+            len(raw_text),
         )
         return _fallback_chat_data(raw_text)
 
@@ -723,9 +723,9 @@ def generate_teacher_rule(
         data = _load_jsonish_object(raw_text)
     except json.JSONDecodeError as exc:
         logger.warning(
-            "claude.teacher_rule.json_parse_failed error=%s raw_preview=%r",
+            "claude.teacher_rule.json_parse_failed error=%s raw_chars=%s",
             exc,
-            raw_text[:1000],
+            len(raw_text),
         )
         return {
             "category": "other",
@@ -797,9 +797,9 @@ def generate_flashcard_set(
         data = _load_jsonish_object(raw_text)
     except json.JSONDecodeError as exc:
         logger.warning(
-            "claude.flashcards.json_parse_failed error=%s raw_preview=%r",
+            "claude.flashcards.json_parse_failed error=%s raw_chars=%s",
             exc,
-            raw_text[:1000],
+            len(raw_text),
         )
         raise
 
@@ -974,13 +974,12 @@ def rewrite_session_style(
     stop_reason = getattr(response, "stop_reason", None)
 
     logger.info(
-        "style_rewrite.raw_response session_id=%s user_id=%s provider=%s stop_reason=%s raw_chars=%s preview=%r",
+        "style_rewrite.raw_response session_id=%s user_id=%s provider=%s stop_reason=%s raw_chars=%s",
         session_id,
         user_id,
         "anthropic",
         stop_reason,
         len(raw_text),
-        raw_text[:1000],
     )
     if stop_reason == "max_tokens":
         logger.warning(
@@ -995,11 +994,11 @@ def rewrite_session_style(
         data = _load_jsonish_object(raw_text)
     except json.JSONDecodeError as exc:
         logger.warning(
-            "style_rewrite.json_parse_failed session_id=%s user_id=%s error=%s raw_preview=%r",
+            "style_rewrite.json_parse_failed session_id=%s user_id=%s error=%s raw_chars=%s",
             session_id,
             user_id,
             exc,
-            raw_text[:1000],
+            len(raw_text),
         )
         return {"rewrites": []}
 
@@ -1033,9 +1032,9 @@ def generate_resource_questions(
         data = _load_jsonish_object(raw_text)
     except json.JSONDecodeError:
         logger.warning(
-            "claude.resource_questions.json_parse_failed resource_id=%s raw_preview=%r",
+            "claude.resource_questions.json_parse_failed resource_id=%s raw_chars=%s",
             resource.get("id"),
-            raw_text[:1000],
+            len(raw_text),
         )
         return {
             "resource_id": resource.get("id"),
