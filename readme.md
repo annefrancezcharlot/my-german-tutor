@@ -53,13 +53,12 @@ pytest
 
 ## License
 
-The source code in this repository is licensed under the MIT License.
+The source code in this repository is licensed under the AGPL-3.0 license.
 
 The file `backend/content/nouns_cleaned.csv` is derived from:
 https://github.com/gambolputty/german-nouns
 
 Original license: CC BY-SA 4.0
-
 Modifications:
 - Removed unused columns
 - Filtered entries
