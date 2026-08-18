@@ -13,12 +13,16 @@ import type {
   PronunciationFeedbackResponse, TeacherRule, TranscriptionResponse,
 } from '../types';
 
+// In local development, Vite proxies /api to the FastAPI server. Deployments can
+// override this with the public backend URL at build time.
+const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiBaseUrl,
 });
 
 const authApi = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiBaseUrl,
 });
 
 let authTokenProvider: (() => Promise<string | null>) | null = null;

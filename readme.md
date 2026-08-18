@@ -33,6 +33,26 @@ After reaching an intermediate level in German, I found myself making the same m
 
 - React
 
+## Local development
+
+Start the API from the backend directory so its `.env` file is loaded:
+
+```bash
+cd backend
+uvicorn main:app --reload
+```
+
+In another terminal, start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend uses Vite's `/api` proxy locally. To call a different API, copy
+`frontend/.env.example` to `frontend/.env` and change `VITE_API_URL`.
+
 ## Testing
 
 The project includes:
