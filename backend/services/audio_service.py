@@ -9,11 +9,16 @@ load_dotenv(env_path)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def transcribe_audio(file_obj):
+def transcribe_audio(file_obj, prompt: str | None = None):
+    request = {
+        "model": "gpt-4o-transcribe",
+        "file": file_obj,
+        "language": "de",
+    }
+    if prompt:
+        request["prompt"] = prompt
     transcript = client.audio.transcriptions.create(
-        model="gpt-4o-transcribe",
-        file=file_obj,
-        language="de",
+        **request,
     )
     return transcript.text
 
@@ -31,7 +36,7 @@ def synthesize_speech(
         model=model,
         voice=voice,
         input=text,
-        instructions=f"Speak in {style}. Use clear German pronunciation.",
+        instructions=f"Speak in {style}.",
         response_format="mp3",
     )
     return response.content
@@ -53,7 +58,7 @@ def stream_speech(
         model=model,
         voice=voice,
         input=text,
-        instructions=f"Speak in {style}. Use clear German pronunciation.",
+        instructions=f"Speak in {style}.",
         response_format="mp3",
     ) as response:
         for chunk in response.iter_bytes(chunk_size=4096):

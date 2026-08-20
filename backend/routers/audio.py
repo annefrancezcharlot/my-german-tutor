@@ -1,6 +1,6 @@
 from difflib import SequenceMatcher
 from io import BytesIO
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -113,6 +113,7 @@ def _build_pronunciation_feedback(score: int, expected_text: str, transcribed_te
 @router.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe(
     file: UploadFile = File(...),
+    purpose: Optional[Literal["conversation", "flashcards"]] = Form(default="conversation"),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     require_user_rate_limit(current_user, "audio:transcribe", AUDIO_TRANSCRIBE_PER_HOUR, HOUR)
@@ -120,7 +121,14 @@ async def transcribe(
     audio_file = await _read_audio_upload(file)
 
     try:
-        text = transcribe_audio(audio_file)
+        prompt = None
+        if purpose == "flashcards":
+            prompt = (
+                "The speaker is dictating a list of German words or expressions for flashcards. "
+                "Transcribe the terms exactly in German, separated by commas. Do not translate, "
+                "correct, explain, or add words."
+            )
+        text = transcribe_audio(audio_file, prompt=prompt) if prompt else transcribe_audio(audio_file)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
 

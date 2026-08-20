@@ -1,14 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookMarked, Layers, Loader2, MessageSquare, Mic, MicOff, Sparkles, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookMarked, GitMerge, Layers, Loader2, MessageSquare, Mic, MicOff, Pencil, Plus, Sparkles, Trash2, Volume2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
+  deleteFlashcard,
+  deleteFlashcardSet,
+  extendFlashcardSet,
   generateFlashcardSet,
   getPronunciationFeedback,
   getFlashcardSet,
   getFlashcardSets,
   getFlashcardStudySession,
+  mergeFlashcardSets,
   saveFlashcardSession,
+  transcribeAudio,
+  updateFlashcard,
 } from '../../api';
 import type {
   Flashcard,
@@ -17,6 +23,7 @@ import type {
   FlashcardSetSummary,
   FlashcardStudyMode,
   FlashcardStudySummary,
+  FlashcardTranslationLanguage,
   PronunciationFeedbackResponse,
   SelectedConversation,
   User,
@@ -25,6 +32,8 @@ import { createMediaRecorder, playSpeech, stopMediaStream } from '../../utils/au
 
 type DetailTab = 'example' | 'cases' | 'tenses';
 type CardStartSide = 'front' | 'back';
+type GenerationMode = 'theme' | 'terms';
+type ManagementMode = 'extend' | 'merge' | 'cards' | null;
 
 const detailLabels: Record<DetailTab, string> = {
   example: 'Example',
@@ -70,10 +79,17 @@ const studyModeLabels: Record<FlashcardStudyMode, string> = {
   all: 'Full deck',
 };
 
-const cardStartSideLabels: Record<CardStartSide, string> = {
-  front: 'German first',
-  back: 'English first',
+const translationLanguageLabels: Record<FlashcardTranslationLanguage, string> = {
+  en: 'English',
+  fr: 'French',
 };
+
+export const parseFlashcardTerms = (value: string): string[] => Array.from(new Set(
+  value
+    .split(/[,;\n]+/)
+    .map(term => term.trim())
+    .filter(Boolean),
+)).slice(0, 30);
 
 const maxSessionRepeats: Partial<Record<FlashcardReviewRating, number>> = {
   again: 2,
@@ -113,6 +129,19 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const [generateTopic, setGenerateTopic] = useState('');
   const [generatePreciseTopic, setGeneratePreciseTopic] = useState('');
   const [generateCount, setGenerateCount] = useState(12);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('theme');
+  const [translationLanguage, setTranslationLanguage] = useState<FlashcardTranslationLanguage>('en');
+  const [customSetName, setCustomSetName] = useState('');
+  const [customTermsText, setCustomTermsText] = useState('');
+  const [vocabularyRecording, setVocabularyRecording] = useState(false);
+  const [vocabularyTranscribing, setVocabularyTranscribing] = useState(false);
+  const [managementMode, setManagementMode] = useState<ManagementMode>(null);
+  const [managingSet, setManagingSet] = useState(false);
+  const [managementNotice, setManagementNotice] = useState<string | null>(null);
+  const [extendTermsText, setExtendTermsText] = useState('');
+  const [mergeSetId, setMergeSetId] = useState('');
+  const [mergeTitle, setMergeTitle] = useState('');
+  const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [speakingText, setSpeakingText] = useState<string | null>(null);
   const [pronunciationRecording, setPronunciationRecording] = useState(false);
   const [pronunciationLoading, setPronunciationLoading] = useState(false);
@@ -122,6 +151,9 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const pronunciationRecorderRef = useRef<MediaRecorder | null>(null);
   const pronunciationStreamRef = useRef<MediaStream | null>(null);
   const pronunciationChunksRef = useRef<BlobPart[]>([]);
+  const vocabularyRecorderRef = useRef<MediaRecorder | null>(null);
+  const vocabularyStreamRef = useRef<MediaStream | null>(null);
+  const vocabularyChunksRef = useRef<BlobPart[]>([]);
 
   useEffect(() => {
     const loadSets = async () => {
@@ -149,6 +181,16 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     ? `${completedCount} / ${initialQueueCount}`
     : '0 / 0';
   const unsavedCount = Object.keys(sessionTags).length;
+  const customTermCount = parseFlashcardTerms(customTermsText).length;
+  const canGenerateSet = generationMode === 'theme'
+    ? Boolean(generateTopic.trim())
+    : customTermCount > 0;
+  const mergeCandidates = selectedSet
+    ? sets.filter(set => (
+        set.id !== selectedSet.id
+        && (set.translation_language ?? 'en') === (selectedSet.translation_language ?? 'en')
+      ))
+    : [];
   const initialShowBack = cardStartSide === 'back';
   const visibleCardText = currentCard
     ? showBack
@@ -156,12 +198,19 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       : currentCard.front
     : '';
   const visibleCardAudioStyle = showBack
-    ? 'clear natural English pronunciation'
+    ? selectedSet?.translation_language === 'fr'
+      ? 'clear natural French pronunciation'
+      : 'clear natural English pronunciation'
     : 'slow clear German pronunciation';
+  const cardStartSideLabels: Record<CardStartSide, string> = {
+    front: 'German first',
+    back: `${translationLanguageLabels[selectedSet?.translation_language ?? 'en']} first`,
+  };
 
   useEffect(() => {
     return () => {
       stopMediaStream(pronunciationStreamRef.current);
+      stopMediaStream(vocabularyStreamRef.current);
     };
   }, []);
 
@@ -188,6 +237,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const openSet = async (setId: string) => {
     setLoadingSet(true);
     setError(null);
+    setManagementNotice(null);
     try {
       const [nextSet, studySession] = await Promise.all([
         getFlashcardSet(setId),
@@ -195,6 +245,11 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       ]);
 
       setSelectedSet(nextSet);
+      setManagementMode(null);
+      setEditingCard(null);
+      setExtendTermsText('');
+      setMergeSetId('');
+      setMergeTitle('');
       setStudySummary(studySession.summary);
       setSessionTags({});
       setLastSavedCount(0);
@@ -214,27 +269,192 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   };
 
   const handleGenerateSet = async () => {
-    const topic = generateTopic.trim();
+    const topic = generationMode === 'theme' ? generateTopic.trim() : customSetName.trim();
     const preciseTopic = generatePreciseTopic.trim();
-    if (!topic || generatingSet) return;
+    const suppliedTerms = parseFlashcardTerms(customTermsText);
+    if (generatingSet || (generationMode === 'theme' ? !topic : suppliedTerms.length === 0)) return;
 
     setGeneratingSet(true);
     setError(null);
     try {
-      const generated = await generateFlashcardSet(
-        topic,
-        preciseTopic || undefined,
-        Math.min(30, Math.max(3, generateCount || 12)),
-      );
+      const generated = await generateFlashcardSet({
+        topic: topic || undefined,
+        precise_topic: generationMode === 'theme' ? preciseTopic || undefined : undefined,
+        count: generationMode === 'theme'
+          ? Math.min(30, Math.max(3, generateCount || 12))
+          : suppliedTerms.length,
+        terms: generationMode === 'terms' ? suppliedTerms : undefined,
+        translation_language: translationLanguage,
+      });
       const nextSets = await getFlashcardSets();
       setSets(nextSets);
       setGenerateTopic('');
       setGeneratePreciseTopic('');
+      setCustomSetName('');
+      setCustomTermsText('');
       await openSet(generated.id);
     } catch {
       setError('Flashcard set could not be generated.');
     } finally {
       setGeneratingSet(false);
+    }
+  };
+
+  const stopVocabularyRecording = () => {
+    if (vocabularyRecorderRef.current?.state === 'recording') {
+      vocabularyRecorderRef.current.requestData();
+      vocabularyRecorderRef.current.stop();
+    }
+    setVocabularyRecording(false);
+  };
+
+  const startVocabularyRecording = async (target: 'create' | 'extend') => {
+    if (vocabularyRecording || vocabularyTranscribing || generatingSet) return;
+
+    setAudioError(null);
+    try {
+      const { recorder, stream, chunks } = await createMediaRecorder();
+      vocabularyRecorderRef.current = recorder;
+      vocabularyStreamRef.current = stream;
+      vocabularyChunksRef.current = chunks;
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(vocabularyChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm',
+        });
+        stopMediaStream(vocabularyStreamRef.current);
+        vocabularyStreamRef.current = null;
+        vocabularyRecorderRef.current = null;
+        vocabularyChunksRef.current = [];
+        setVocabularyRecording(false);
+        if (audioBlob.size === 0) return;
+
+        setVocabularyTranscribing(true);
+        try {
+          const result = await transcribeAudio(audioBlob, 'flashcards');
+          const appendTranscription = (previous: string) => (
+            previous.trim() ? `${previous.trim()}, ${result.text}` : result.text
+          );
+          if (target === 'extend') setExtendTermsText(appendTranscription);
+          else setCustomTermsText(appendTranscription);
+        } catch {
+          setAudioError('The vocabulary list could not be transcribed.');
+        } finally {
+          setVocabularyTranscribing(false);
+        }
+      };
+      recorder.start(250);
+      setVocabularyRecording(true);
+    } catch {
+      setAudioError('Microphone could not be started.');
+      stopMediaStream(vocabularyStreamRef.current);
+      vocabularyStreamRef.current = null;
+      vocabularyRecorderRef.current = null;
+      setVocabularyRecording(false);
+    }
+  };
+
+  const toggleVocabularyRecording = (target: 'create' | 'extend') => {
+    if (vocabularyRecording) stopVocabularyRecording();
+    else void startVocabularyRecording(target);
+  };
+
+  const handleExtendSet = async () => {
+    if (!selectedSet || managingSet) return;
+    const terms = parseFlashcardTerms(extendTermsText);
+    if (terms.length === 0) return;
+    setManagingSet(true);
+    setError(null);
+    setManagementNotice(null);
+    try {
+      const extended = await extendFlashcardSet(selectedSet.id, terms);
+      setSets(await getFlashcardSets());
+      await openSet(extended.id);
+      const addedLabel = `${extended.added_count} ${extended.added_count === 1 ? 'word' : 'words'} added.`;
+      const skippedLabel = extended.skipped_count > 0
+        ? ` ${extended.skipped_count} ${extended.skipped_count === 1 ? 'word was' : 'words were'} already in the set and skipped.`
+        : '';
+      setManagementNotice(`${addedLabel}${skippedLabel}`);
+    } catch {
+      setError('The new words could not be added.');
+    } finally {
+      setManagingSet(false);
+    }
+  };
+
+  const handleMergeSets = async () => {
+    if (!selectedSet || !mergeSetId || managingSet) return;
+    setManagingSet(true);
+    setError(null);
+    try {
+      const merged = await mergeFlashcardSets(
+        [selectedSet.id, mergeSetId],
+        mergeTitle.trim() || undefined,
+      );
+      setSets(await getFlashcardSets());
+      await openSet(merged.id);
+    } catch {
+      setError('The flashcard sets could not be merged.');
+    } finally {
+      setManagingSet(false);
+    }
+  };
+
+  const handleDeleteSet = async () => {
+    if (!selectedSet?.is_editable || managingSet) return;
+    if (!window.confirm(`Delete “${selectedSet.title}” and its study progress?`)) return;
+    setManagingSet(true);
+    setError(null);
+    try {
+      await deleteFlashcardSet(selectedSet.id);
+      setSelectedSet(null);
+      setManagementMode(null);
+      setSets(await getFlashcardSets());
+    } catch {
+      setError('The flashcard set could not be deleted.');
+    } finally {
+      setManagingSet(false);
+    }
+  };
+
+  const handleSaveCard = async () => {
+    if (!selectedSet?.is_editable || !editingCard || managingSet) return;
+    if (!editingCard.front.trim() || !editingCard.back.trim()) return;
+    setManagingSet(true);
+    setError(null);
+    try {
+      const saved = await updateFlashcard(selectedSet.id, editingCard.id, {
+        front: editingCard.front,
+        back: editingCard.back,
+        example: editingCard.example ?? '',
+        case_examples: editingCard.case_examples ?? {},
+        tense_examples: editingCard.tense_examples ?? {},
+        tags: editingCard.tags ?? [],
+      });
+      setSelectedSet(current => current ? {
+        ...current,
+        cards: current.cards.map(card => card.id === saved.id ? saved : card),
+      } : current);
+      setEditingCard(null);
+    } catch {
+      setError('The flashcard could not be saved.');
+    } finally {
+      setManagingSet(false);
+    }
+  };
+
+  const handleDeleteCard = async (card: Flashcard) => {
+    if (!selectedSet?.is_editable || managingSet) return;
+    if (!window.confirm(`Delete “${card.front}” from this set?`)) return;
+    setManagingSet(true);
+    setError(null);
+    try {
+      await deleteFlashcard(selectedSet.id, card.id);
+      setSets(await getFlashcardSets());
+      await openSet(selectedSet.id);
+    } catch {
+      setError('The flashcard could not be deleted.');
+    } finally {
+      setManagingSet(false);
     }
   };
 
@@ -481,6 +701,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
         </div>
       )}
 
+      {managementNotice && (
+        <div className="rounded-xl border border-green-700/50 bg-green-900/25 px-4 py-3 text-sm text-green-200">
+          {managementNotice}
+        </div>
+      )}
+
       {!selectedSet ? (
         <div className="space-y-5">
           <div className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
@@ -491,35 +717,115 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               <div>
                 <h2 className="text-lg font-semibold text-white">Generate a new set</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Create a JSON flashcard set by topic. It will be saved in the content folder.
+                  Let AI choose vocabulary for a theme, or provide your own German terms.
                 </p>
               </div>
             </div>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_120px_auto]">
-              <input
-                value={generateTopic}
-                onChange={event => setGenerateTopic(event.target.value)}
-                placeholder="Topic, e.g. work"
-                className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
-              />
-              <input
-                value={generatePreciseTopic}
-                onChange={event => setGeneratePreciseTopic(event.target.value)}
-                placeholder="Precise focus, e.g. job interview"
-                className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
-              />
-              <input
-                type="number"
-                min={3}
-                max={30}
-                value={generateCount}
-                onChange={event => setGenerateCount(Number(event.target.value))}
-                className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors focus:border-blue-500"
-              />
+            <div className="mb-4 grid gap-2 rounded-xl bg-slate-900 p-1 sm:grid-cols-2">
+              {([
+                ['theme', 'Generate from a theme'],
+                ['terms', 'Use my own words'],
+              ] as Array<[GenerationMode, string]>).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setGenerationMode(mode)}
+                  className={clsx(
+                    'rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
+                    generationMode === mode
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {generationMode === 'theme' ? (
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_120px]">
+                <input
+                  value={generateTopic}
+                  onChange={event => setGenerateTopic(event.target.value)}
+                  placeholder="Topic, e.g. work"
+                  className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
+                />
+                <input
+                  value={generatePreciseTopic}
+                  onChange={event => setGeneratePreciseTopic(event.target.value)}
+                  placeholder="Precise focus, e.g. job interview"
+                  className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
+                />
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  value={generateCount}
+                  aria-label="Number of cards"
+                  onChange={event => setGenerateCount(Number(event.target.value))}
+                  className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors focus:border-blue-500"
+                />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  value={customSetName}
+                  onChange={event => setCustomSetName(event.target.value)}
+                  placeholder="Set name (optional)"
+                  className="w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
+                />
+                <textarea
+                  value={customTermsText}
+                  onChange={event => setCustomTermsText(event.target.value)}
+                  rows={4}
+                  maxLength={3800}
+                  placeholder="German words or expressions, separated by commas or new lines"
+                  className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleVocabularyRecording('create')}
+                    disabled={vocabularyTranscribing || generatingSet}
+                    className={clsx(
+                      'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50',
+                      vocabularyRecording ? 'bg-red-600 hover:bg-red-500' : 'bg-cyan-600 hover:bg-cyan-500',
+                    )}
+                  >
+                    {vocabularyTranscribing
+                      ? <Loader2 size={16} className="animate-spin" />
+                      : vocabularyRecording
+                        ? <MicOff size={16} />
+                        : <Mic size={16} />}
+                    {vocabularyRecording
+                      ? 'Stop dictating'
+                      : vocabularyTranscribing
+                        ? 'Transcribing...'
+                        : 'Dictate words'}
+                  </button>
+                  <span className="text-xs text-slate-400">
+                    {customTermCount}/30 terms detected — review the transcription before generating.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+              <label className="grid gap-1 text-xs font-semibold text-slate-300">
+                Translation on the back
+                <select
+                  value={translationLanguage}
+                  onChange={event => setTranslationLanguage(event.target.value as FlashcardTranslationLanguage)}
+                  className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-normal text-white outline-none focus:border-blue-500"
+                >
+                  <option value="en">English</option>
+                  <option value="fr">French</option>
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={handleGenerateSet}
-                disabled={generatingSet || !generateTopic.trim()}
+                disabled={generatingSet || vocabularyTranscribing || !canGenerateSet}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles size={16} />
@@ -541,7 +847,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   <div>
                     <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-blue-300">
                       <BookMarked size={14} />
-                      {set.topic} · {set.level}
+                      {set.topic} · {set.level} · {translationLanguageLabels[set.translation_language ?? 'en']}
                     </div>
                     <h2 className="text-lg font-semibold text-white">{set.title}</h2>
                   </div>
@@ -571,6 +877,189 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 {studyModeLabels[studyMode]} · {activeQueueCount} left · {progressLabel} done
               </div>
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-700 bg-slate-800 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setManagementMode(current => current === 'extend' ? null : 'extend')}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
+              >
+                <Plus size={15} /> Add words
+              </button>
+              {selectedSet.is_editable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCard(null);
+                      setManagementMode(current => current === 'cards' ? null : 'cards');
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
+                  >
+                    <Pencil size={15} /> Edit cards
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setManagementMode(current => current === 'merge' ? null : 'merge')}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
+              >
+                <GitMerge size={15} /> Merge with another set
+              </button>
+              {selectedSet.is_editable && (
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteSet()}
+                  disabled={managingSet}
+                  className="ml-auto inline-flex items-center gap-2 rounded-xl border border-red-700/70 px-3 py-2 text-sm text-red-300 hover:bg-red-900/30 disabled:opacity-50"
+                >
+                  <Trash2 size={15} /> Delete set
+                </button>
+              )}
+            </div>
+
+            {!selectedSet.is_editable && (
+              <p className="mt-3 text-xs text-slate-400">
+                This is a shared set. Adding words or merging creates a personal set; the original remains unchanged.
+              </p>
+            )}
+
+            {managementMode === 'extend' && (
+              <div className="mt-4 space-y-3 border-t border-slate-700 pt-4">
+                <textarea
+                  value={extendTermsText}
+                  onChange={event => setExtendTermsText(event.target.value)}
+                  rows={3}
+                  placeholder="New German words or expressions, separated by commas or new lines"
+                  className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleVocabularyRecording('extend')}
+                      disabled={vocabularyTranscribing || managingSet}
+                      className={clsx(
+                        'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white disabled:opacity-50',
+                        vocabularyRecording ? 'bg-red-600' : 'bg-cyan-600',
+                      )}
+                    >
+                      {vocabularyTranscribing
+                        ? <Loader2 size={15} className="animate-spin" />
+                        : vocabularyRecording
+                          ? <MicOff size={15} />
+                          : <Mic size={15} />}
+                      {vocabularyRecording ? 'Stop dictating' : vocabularyTranscribing ? 'Transcribing...' : 'Dictate words'}
+                    </button>
+                    <span className="text-xs text-slate-400">{parseFlashcardTerms(extendTermsText).length}/30 terms</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleExtendSet()}
+                    disabled={managingSet || vocabularyTranscribing || parseFlashcardTerms(extendTermsText).length === 0}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    {managingSet ? 'Adding...' : 'Generate and add'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {managementMode === 'merge' && (
+              <div className="mt-4 grid gap-3 border-t border-slate-700 pt-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <select
+                  value={mergeSetId}
+                  onChange={event => setMergeSetId(event.target.value)}
+                  className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500"
+                >
+                  <option value="">Choose a set with a {translationLanguageLabels[selectedSet.translation_language]} back</option>
+                  {mergeCandidates.map(set => <option key={set.id} value={set.id}>{set.title} ({set.card_count})</option>)}
+                </select>
+                <input
+                  value={mergeTitle}
+                  onChange={event => setMergeTitle(event.target.value)}
+                  placeholder="Name for merged set (optional)"
+                  className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleMergeSets()}
+                  disabled={!mergeSetId || managingSet}
+                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {managingSet ? 'Merging...' : 'Create merged set'}
+                </button>
+                {mergeCandidates.length === 0 && (
+                  <p className="text-xs text-slate-400 md:col-span-3">No other set uses the same back language.</p>
+                )}
+              </div>
+            )}
+
+            {managementMode === 'cards' && selectedSet.is_editable && (
+              <div className="mt-4 space-y-3 border-t border-slate-700 pt-4">
+                {selectedSet.cards.map(card => (
+                  <div key={card.id} className="rounded-xl border border-slate-700 bg-slate-900 p-3">
+                    {editingCard?.id === card.id ? (
+                      <div className="space-y-3">
+                        <input
+                          value={editingCard.front}
+                          onChange={event => setEditingCard(current => current ? { ...current, front: event.target.value } : current)}
+                          placeholder="German front"
+                          className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                        />
+                        <input
+                          value={editingCard.back}
+                          onChange={event => setEditingCard(current => current ? { ...current, back: event.target.value } : current)}
+                          placeholder={`${translationLanguageLabels[selectedSet.translation_language]} back`}
+                          className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                        />
+                        <textarea
+                          value={editingCard.example ?? ''}
+                          onChange={event => setEditingCard(current => current ? { ...current, example: event.target.value } : current)}
+                          rows={2}
+                          placeholder="German example sentence"
+                          className="w-full resize-y rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                        />
+                        <input
+                          value={(editingCard.tags ?? []).join(', ')}
+                          onChange={event => setEditingCard(current => current ? {
+                            ...current,
+                            tags: event.target.value.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 8),
+                          } : current)}
+                          placeholder="Tags, separated by commas"
+                          className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => setEditingCard(null)} className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveCard()}
+                            disabled={managingSet || !editingCard.front.trim() || !editingCard.back.trim()}
+                            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            {managingSet ? 'Saving...' : 'Save card'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-white">{card.front}</div>
+                          <div className="truncate text-xs text-slate-400">{card.back}</div>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <button type="button" onClick={() => setEditingCard({ ...card })} className="rounded-lg p-2 text-slate-300 hover:bg-slate-700 hover:text-white" title="Edit card"><Pencil size={15} /></button>
+                          <button type="button" onClick={() => void handleDeleteCard(card)} disabled={managingSet} className="rounded-lg p-2 text-red-300 hover:bg-red-900/30 disabled:opacity-50" title="Delete card"><Trash2 size={15} /></button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3">

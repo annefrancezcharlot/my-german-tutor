@@ -273,14 +273,19 @@ export interface FlashcardSetSummary {
   level: string;
   title: string;
   description: string;
+  translation_language: FlashcardTranslationLanguage;
+  is_editable: boolean;
   card_count: number;
 }
 
+export type FlashcardTranslationLanguage = 'en' | 'fr';
+
 export interface FlashcardGenerateRequest {
-  user_id: string;
-  topic: string;
+  topic?: string;
   precise_topic?: string;
-  count: number;
+  count?: number;
+  terms?: string[];
+  translation_language: FlashcardTranslationLanguage;
 }
 
 export interface Flashcard {
@@ -299,7 +304,14 @@ export interface FlashcardSet {
   level: string;
   title: string;
   description: string;
+  translation_language: FlashcardTranslationLanguage;
+  is_editable: boolean;
   cards: Flashcard[];
+}
+
+export interface FlashcardExtendResult extends FlashcardSet {
+  added_count: number;
+  skipped_count: number;
 }
 
 export type FlashcardReviewRating = 'again' | 'hard' | 'good' | 'easy';

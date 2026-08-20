@@ -555,6 +555,151 @@ def test_flashcards_router_with_mocked_generation(client, user, monkeypatch):
     assert saved.status_code == 200
 
 
+def test_flashcards_generate_from_supplied_terms_with_french_backs(client, user, monkeypatch):
+    captured = {}
+
+    def fake_generation(**kwargs):
+        captured.update(kwargs)
+        return {
+            "topic": "Meine Wörter",
+            "title": "Meine Wörter",
+            "description": "Vom Lernenden ausgewählte Wörter",
+            "cards": [
+                {"front": "die Wohnung", "back": "l'appartement", "tags": ["noun"]},
+                {"front": "sich erinnern an", "back": "se souvenir de", "tags": ["verb"]},
+            ],
+        }
+
+    monkeypatch.setattr("routers.flashcards.generate_flashcard_set", fake_generation)
+    generated = client.post(
+        "/flashcards/sets/generate",
+        json={
+            "topic": "Meine Auswahl",
+            "terms": ["Wohnung", "sich erinnern an"],
+            "translation_language": "fr",
+        },
+    )
+
+    assert generated.status_code == 200
+    assert generated.json()["translation_language"] == "fr"
+    assert captured["supplied_terms"] == ["Wohnung", "sich erinnern an"]
+    assert captured["count"] == 2
+    assert captured["translation_language"] == "fr"
+
+    saved = client.get(f"/flashcards/sets/{generated.json()['id']}")
+    assert saved.status_code == 200
+    assert saved.json()["translation_language"] == "fr"
+    assert saved.json()["cards"][0]["back"] == "l'appartement"
+    assert saved.json()["cards"][0]["tags"] == ["noun"]
+
+
+def test_personal_flashcard_set_management(client, db_session, user, monkeypatch):
+    def fake_generation(**kwargs):
+        terms = kwargs.get("supplied_terms") or [kwargs["topic"]]
+        return {
+            "topic": kwargs["topic"],
+            "title": f"{kwargs['topic']} cards",
+            "description": "Generated cards",
+            "cards": [
+                {
+                    "front": f"die {term}",
+                    "back": f"the {term}",
+                    "example": f"Das ist die {term}.",
+                    "tags": ["noun"],
+                }
+                for term in terms
+            ],
+        }
+
+    monkeypatch.setattr("routers.flashcards.generate_flashcard_set", fake_generation)
+    first = client.post(
+        "/flashcards/sets/generate",
+        json={"topic": "Home", "count": 3, "translation_language": "en"},
+    ).json()
+    second = client.post(
+        "/flashcards/sets/generate",
+        json={"topic": "Travel", "count": 3, "translation_language": "en"},
+    ).json()
+
+    extended = client.post(
+        f"/flashcards/sets/{first['id']}/extend",
+        json={"terms": ["Küche", "Lampe"]},
+    )
+    assert extended.status_code == 200
+    assert len(extended.json()["cards"]) == 3
+    assert extended.json()["is_editable"] is True
+    assert extended.json()["added_count"] == 2
+    assert extended.json()["skipped_count"] == 0
+
+    partially_extended = client.post(
+        f"/flashcards/sets/{first['id']}/extend",
+        json={"terms": ["Home", "Fenster"]},
+    )
+    assert partially_extended.status_code == 200
+    assert partially_extended.json()["added_count"] == 1
+    assert partially_extended.json()["skipped_count"] == 1
+    assert len(partially_extended.json()["cards"]) == 4
+
+    card = extended.json()["cards"][0]
+    edited = client.put(
+        f"/flashcards/sets/{first['id']}/cards/{card['id']}",
+        json={
+            "front": "das Zuhause",
+            "back": "home",
+            "example": "Ich bin zu Hause.",
+            "tags": ["noun"],
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["front"] == "das Zuhause"
+
+    removed_card = extended.json()["cards"][1]
+    assert client.delete(
+        f"/flashcards/sets/{first['id']}/cards/{removed_card['id']}"
+    ).status_code == 204
+
+    merged = client.post(
+        "/flashcards/sets/merge",
+        json={"set_ids": [first["id"], second["id"]], "title": "Combined vocabulary"},
+    )
+    assert merged.status_code == 200
+    assert merged.json()["title"] == "Combined vocabulary"
+    assert merged.json()["is_editable"] is True
+    assert len(merged.json()["cards"]) == 4
+
+    assert client.delete(f"/flashcards/sets/{first['id']}").status_code == 204
+    assert client.get(f"/flashcards/sets/{first['id']}").status_code == 404
+
+    shared = models.FlashcardSet(
+        id="shared-basics",
+        user_id=None,
+        topic="Basics",
+        level="B2",
+        title="Shared Basics",
+        description="Shared vocabulary",
+    )
+    shared.cards.append(models.FlashcardCard(
+        card_id="hallo",
+        position=1,
+        front="hallo",
+        back="hello",
+        tags=[],
+    ))
+    db_session.add(shared)
+    db_session.commit()
+    extended_shared = client.post(
+        "/flashcards/sets/shared-basics/extend",
+        json={"terms": ["Abschied"]},
+    )
+    assert extended_shared.status_code == 200
+    assert extended_shared.json()["id"] != "shared-basics"
+    assert extended_shared.json()["is_editable"] is True
+    assert extended_shared.json()["added_count"] == 1
+    assert extended_shared.json()["skipped_count"] == 0
+    assert len(extended_shared.json()["cards"]) == 2
+    assert len(client.get("/flashcards/sets/shared-basics").json()["cards"]) == 1
+
+
 def test_resources_translate_and_audio_routers_with_mocked_providers(client, user, monkeypatch):
     monkeypatch.setattr(
         "routers.resources.generate_resource_questions",
@@ -590,6 +735,23 @@ def test_resources_translate_and_audio_routers_with_mocked_providers(client, use
     transcribed = client.post("/audio/transcribe", files=audio_file)
     assert transcribed.status_code == 200
     assert transcribed.json()["text"] == "Hallo"
+
+    captured_prompt = {}
+
+    def transcribe_flashcards(file_obj, prompt=None):
+        captured_prompt["prompt"] = prompt
+        return "die Wohnung, sich erinnern an"
+
+    monkeypatch.setattr("routers.audio.transcribe_audio", transcribe_flashcards)
+    flashcard_transcription = client.post(
+        "/audio/transcribe",
+        data={"purpose": "flashcards"},
+        files=audio_file,
+    )
+    assert flashcard_transcription.status_code == 200
+    assert flashcard_transcription.json()["text"] == "die Wohnung, sich erinnern an"
+    assert "separated by commas" in captured_prompt["prompt"]
+    monkeypatch.setattr("routers.audio.transcribe_audio", lambda file_obj: "Hallo")
 
     speech = client.post("/audio/speech", json={"text": "Hallo"})
     assert speech.status_code == 200

@@ -347,6 +347,21 @@ def test_public_flashcard_sets_remain_visible_to_other_users(client, seeded_data
     assert response.json()["id"] == seeded_data["public_flashcard_set_id"]
 
 
+def test_flashcard_set_management_requires_ownership(client, seeded_data):
+    _act_as(client, USER_B_ID)
+
+    hidden_personal = client.delete(f"/flashcards/sets/{seeded_data['flashcard_set_id']}")
+    shared_set = client.delete(f"/flashcards/sets/{seeded_data['public_flashcard_set_id']}")
+    shared_card = client.put(
+        f"/flashcards/sets/{seeded_data['public_flashcard_set_id']}/cards/hallo",
+        json={"front": "hallo", "back": "hello"},
+    )
+
+    assert hidden_personal.status_code == 404
+    assert shared_set.status_code == 403
+    assert shared_card.status_code == 403
+
+
 def test_owner_can_access_seeded_resources(client, seeded_data):
     _act_as(client, USER_A_ID)
 

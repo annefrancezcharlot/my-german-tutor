@@ -313,13 +313,39 @@ Rules:
 - Do not include markdown, comments, or text outside the JSON."""
 
 
-def _build_flashcard_prompt(topic: str, focus: str, level: str, count: int) -> str:
+def _build_flashcard_prompt(
+    topic: str,
+    focus: str,
+    level: str,
+    count: int,
+    translation_language: str = "en",
+    supplied_terms: Optional[List[str]] = None,
+) -> str:
+    language_name = "French" if translation_language == "fr" else "English"
+    supplied_terms_block = ""
+    generation_rule = (
+        f"- Generate exactly {count} cards.\n"
+        "- Prefer useful B1-C1 vocabulary, chunks, collocations, and fixed preposition patterns."
+    )
+    if supplied_terms:
+        supplied_terms_block = (
+            "\nLearner-supplied German words and expressions:\n"
+            f"{json.dumps(supplied_terms, ensure_ascii=False)}\n"
+        )
+        generation_rule = (
+            f"- Create exactly one card for each of the {count} supplied terms, in the same order.\n"
+            "- Do not omit terms, merge terms, or introduce unrelated vocabulary.\n"
+            "- Correct obvious spelling, and add the correct article to nouns or reflexive pronoun to reflexive verbs."
+        )
+
     return f"""You are an expert German vocabulary tutor.
 Create a flashcard set for a learner at CEFR level {level}.
 
 Theme: {topic}
 Precise topic/focus: {focus}
 Number of cards: {count}
+Translation language: {language_name}
+{supplied_terms_block}
 
 Return ONLY valid JSON in this exact format:
 {{
@@ -330,7 +356,7 @@ Return ONLY valid JSON in this exact format:
   "cards": [
     {{
       "front": "<German word, chunk, collocation, or short phrase>",
-      "back": "<concise English meaning>",
+      "back": "<concise {language_name} meaning>",
       "example": "<natural German example sentence>",
       "case_examples": {{
         "<case or grammar label>": "<German sentence or pattern>"
@@ -344,9 +370,8 @@ Return ONLY valid JSON in this exact format:
 }}
 
 Rules:
-- Generate exactly {count} cards.
-- Prefer useful B1-C1 vocabulary, chunks, collocations, and fixed preposition patterns.
-- The front must be German. The back must be English.
+{generation_rule}
+- The front must be German. The back must be {language_name}.
 - Include articles for nouns.
 - Include reflexive pronouns for reflexive verbs.
 - Include case_examples when the card benefits from case/preposition practice.
@@ -884,10 +909,19 @@ def generate_flashcard_set(
     precise_topic: Optional[str] = None,
     level: str = "B2",
     count: int = 12,
+    translation_language: str = "en",
+    supplied_terms: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Generate a German flashcard set as structured JSON-ready data."""
     focus = precise_topic.strip() if isinstance(precise_topic, str) and precise_topic.strip() else topic
-    prompt = _build_flashcard_prompt(topic, focus, level, count)
+    prompt = _build_flashcard_prompt(
+        topic,
+        focus,
+        level,
+        count,
+        translation_language=translation_language,
+        supplied_terms=supplied_terms,
+    )
 
     response = client.messages.create(
         model=MODEL,

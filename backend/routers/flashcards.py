@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
@@ -29,6 +29,7 @@ STATUS_PRIORITY = {
     "good": 3,
     "easy": 4,
 }
+TRANSLATION_LANGUAGE_TAG_PREFIX = "__translation_language:"
 
 
 class SessionReviewItem(BaseModel):
@@ -42,9 +43,63 @@ class SessionReviewRequest(BaseModel):
 
 
 class FlashcardGenerateRequest(BaseModel):
-    topic: str = Field(min_length=2, max_length=120)
+    topic: Optional[str] = Field(default=None, min_length=2, max_length=120)
     precise_topic: Optional[str] = Field(default=None, max_length=240)
-    count: int = Field(default=12, ge=3, le=30)
+    count: int = Field(default=12, ge=1, le=30)
+    terms: List[str] = Field(default_factory=list, max_length=30)
+    translation_language: Literal["en", "fr"] = "en"
+
+    @model_validator(mode="after")
+    def validate_generation_source(self):
+        self.topic = self.topic.strip() if self.topic else None
+        self.precise_topic = self.precise_topic.strip() if self.precise_topic else None
+        self.terms = list(dict.fromkeys(
+            term.strip() for term in self.terms if isinstance(term, str) and term.strip()
+        ))
+        if any(len(term) > 120 for term in self.terms):
+            raise ValueError("Each German word or expression must be 120 characters or fewer")
+        if not self.topic and not self.terms:
+            raise ValueError("Provide a topic or at least one German word or expression")
+        if not self.terms and self.count < 3:
+            raise ValueError("Topic generation requires at least three cards")
+        return self
+
+
+class FlashcardExtendRequest(BaseModel):
+    terms: List[str] = Field(min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def normalize_terms(self):
+        self.terms = list(dict.fromkeys(
+            term.strip() for term in self.terms if isinstance(term, str) and term.strip()
+        ))
+        if not self.terms:
+            raise ValueError("Provide at least one German word or expression")
+        if any(len(term) > 120 for term in self.terms):
+            raise ValueError("Each German word or expression must be 120 characters or fewer")
+        return self
+
+
+class FlashcardMergeRequest(BaseModel):
+    set_ids: List[str] = Field(min_length=2, max_length=2)
+    title: Optional[str] = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_distinct_sets(self):
+        self.set_ids = list(dict.fromkeys(item.strip() for item in self.set_ids if item.strip()))
+        self.title = self.title.strip() if self.title else None
+        if len(self.set_ids) != 2:
+            raise ValueError("Choose two different flashcard sets")
+        return self
+
+
+class FlashcardCardUpdateRequest(BaseModel):
+    front: str = Field(min_length=1, max_length=240)
+    back: str = Field(min_length=1, max_length=500)
+    example: Optional[str] = Field(default="", max_length=1000)
+    case_examples: Dict[str, str] = Field(default_factory=dict)
+    tense_examples: Dict[str, str] = Field(default_factory=dict)
+    tags: List[str] = Field(default_factory=list, max_length=8)
 
 
 class FlashcardCardStatusResponse(BaseModel):
@@ -142,6 +197,7 @@ def _slugify(value: str, fallback: str = "flashcards") -> str:
 
 
 def _card_to_dict(card: models.FlashcardCard) -> Dict[str, Any]:
+    tags = card.tags if isinstance(card.tags, list) else []
     return {
         "id": card.card_id,
         "front": card.front,
@@ -149,8 +205,20 @@ def _card_to_dict(card: models.FlashcardCard) -> Dict[str, Any]:
         "example": card.example or "",
         "case_examples": card.case_examples if isinstance(card.case_examples, dict) else {},
         "tense_examples": card.tense_examples if isinstance(card.tense_examples, dict) else {},
-        "tags": card.tags if isinstance(card.tags, list) else [],
+        "tags": [
+            tag for tag in tags
+            if isinstance(tag, str) and not tag.startswith(TRANSLATION_LANGUAGE_TAG_PREFIX)
+        ],
     }
+
+
+def _translation_language_for_set(item: models.FlashcardSet) -> str:
+    for card in item.cards:
+        tags = card.tags if isinstance(card.tags, list) else []
+        for tag in tags:
+            if tag == f"{TRANSLATION_LANGUAGE_TAG_PREFIX}fr":
+                return "fr"
+    return "en"
 
 
 def _set_to_dict(item: models.FlashcardSet) -> Dict[str, Any]:
@@ -160,6 +228,8 @@ def _set_to_dict(item: models.FlashcardSet) -> Dict[str, Any]:
         "level": item.level,
         "title": item.title,
         "description": item.description or "",
+        "translation_language": _translation_language_for_set(item),
+        "is_editable": item.user_id is not None,
         "cards": [_card_to_dict(card) for card in item.cards],
     }
 
@@ -273,6 +343,18 @@ def _find_set(
         .filter(models.FlashcardSet.id == set_id)
         .first()
     )
+
+
+def _owned_editable_set(db: Session, set_id: str, user_id: UUID) -> models.FlashcardSet:
+    item = db.query(models.FlashcardSet).filter(
+        models.FlashcardSet.id == set_id,
+        models.FlashcardSet.user_id == user_id,
+    ).first()
+    if item:
+        return item
+    if _find_set(db, set_id, user_id):
+        raise HTTPException(status_code=403, detail="Shared flashcard sets cannot be modified")
+    raise HTTPException(status_code=404, detail="Flashcard set not found")
 
 
 def _card_ids_for_set(db: Session, set_id: str, user_id: Optional[UUID] = None) -> set[str]:
@@ -496,6 +578,8 @@ def list_flashcard_sets(
             "level": item["level"],
             "title": item["title"],
             "description": item.get("description", ""),
+            "translation_language": item.get("translation_language", "en"),
+            "is_editable": item.get("is_editable", False),
             "card_count": len(item["cards"]),
         }
         for item in (_set_to_dict(row) for row in sets)
@@ -516,16 +600,20 @@ def generate_flashcard_set_file(
     )
 
     user = _get_user_or_404(db, current_user.id)
-    topic = request.topic.strip()
-    precise_topic = request.precise_topic.strip() if request.precise_topic else None
+    supplied_terms = request.terms
+    topic = request.topic or "My vocabulary"
+    precise_topic = request.precise_topic
     set_id = _unique_set_id(db, precise_topic or topic, user.level, current_user.id)
+    requested_count = len(supplied_terms) if supplied_terms else request.count
 
     try:
         generated = generate_flashcard_set(
             topic=topic,
             precise_topic=precise_topic,
             level=user.level,
-            count=request.count,
+            count=requested_count,
+            translation_language=request.translation_language,
+            supplied_terms=supplied_terms or None,
         )
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=502, detail="The LLM returned invalid flashcard JSON") from exc
@@ -538,6 +626,11 @@ def generate_flashcard_set_file(
         requested_topic=topic,
         requested_level=user.level,
     )
+    if supplied_terms and len(item["cards"]) != len(supplied_terms):
+        raise HTTPException(
+            status_code=502,
+            detail="Flashcard generation did not return one card for every supplied term",
+        )
 
     db_set = models.FlashcardSet(
         id=item["id"],
@@ -556,7 +649,13 @@ def generate_flashcard_set_file(
             example=card.get("example") or "",
             case_examples=card.get("case_examples") or {},
             tense_examples=card.get("tense_examples") or {},
-            tags=card.get("tags") or [],
+            tags=[
+                *[
+                    tag for tag in (card.get("tags") or [])
+                    if not tag.startswith(TRANSLATION_LANGUAGE_TAG_PREFIX)
+                ],
+                f"{TRANSLATION_LANGUAGE_TAG_PREFIX}{request.translation_language}",
+            ],
         ))
 
     db.add(db_set)
@@ -569,6 +668,8 @@ def generate_flashcard_set_file(
         "level": item["level"],
         "title": item["title"],
         "description": item["description"],
+        "translation_language": request.translation_language,
+        "is_editable": True,
         "card_count": len(item["cards"]),
     }
 
@@ -585,6 +686,256 @@ def get_flashcard_set(
         return _set_to_dict(item)
 
     raise HTTPException(status_code=404, detail="Flashcard set not found")
+
+
+@router.post("/sets/{set_id}/extend")
+def extend_flashcard_set(
+    set_id: str,
+    request: FlashcardExtendRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    require_user_rate_limit(
+        current_user,
+        "flashcards:generate",
+        FLASHCARD_GENERATE_PER_HOUR,
+        HOUR,
+    )
+    source = _find_set(db, set_id, current_user.id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Flashcard set not found")
+    translation_language = _translation_language_for_set(source)
+    if source.user_id is None:
+        item = models.FlashcardSet(
+            id=_unique_set_id(db, f"{source.title} personal", source.level, current_user.id),
+            user_id=current_user.id,
+            topic=source.topic,
+            level=source.level,
+            title=f"{source.title} (personal)",
+            description=source.description or "Personal copy of a shared flashcard set.",
+        )
+        for source_card in source.cards:
+            public_tags = _card_to_dict(source_card)["tags"]
+            item.cards.append(models.FlashcardCard(
+                card_id=source_card.card_id,
+                position=source_card.position,
+                front=source_card.front,
+                back=source_card.back,
+                example=source_card.example or "",
+                case_examples=source_card.case_examples if isinstance(source_card.case_examples, dict) else {},
+                tense_examples=source_card.tense_examples if isinstance(source_card.tense_examples, dict) else {},
+                tags=[*public_tags, f"{TRANSLATION_LANGUAGE_TAG_PREFIX}{translation_language}"],
+            ))
+    else:
+        item = source
+    try:
+        generated = generate_flashcard_set(
+            topic=item.topic,
+            precise_topic=f"Additional vocabulary for {item.title}",
+            level=item.level,
+            count=len(request.terms),
+            translation_language=translation_language,
+            supplied_terms=request.terms,
+        )
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="The LLM returned invalid flashcard JSON") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Flashcard generation failed") from exc
+
+    generated_item = _normalize_generated_flashcard_set(
+        generated,
+        set_id=item.id,
+        requested_topic=item.topic,
+        requested_level=item.level,
+    )
+    if len(generated_item["cards"]) != len(request.terms):
+        raise HTTPException(
+            status_code=502,
+            detail="Flashcard generation did not return one card for every supplied term",
+        )
+
+    seen_fronts = {card.front.strip().casefold() for card in item.cards}
+    new_cards = []
+    skipped_count = 0
+    for card in generated_item["cards"]:
+        normalized_front = card["front"].strip().casefold()
+        if normalized_front in seen_fronts:
+            skipped_count += 1
+            continue
+        seen_fronts.add(normalized_front)
+        new_cards.append(card)
+
+    used_ids = {card.card_id for card in item.cards}
+    next_position = max((card.position for card in item.cards), default=0) + 1
+    for offset, card in enumerate(new_cards):
+        item.cards.append(models.FlashcardCard(
+            card_id=_unique_card_id(card["front"], used_ids, next_position + offset),
+            position=next_position + offset,
+            front=card["front"],
+            back=card["back"],
+            example=card.get("example") or "",
+            case_examples=card.get("case_examples") or {},
+            tense_examples=card.get("tense_examples") or {},
+            tags=[
+                *[
+                    tag for tag in (card.get("tags") or [])
+                    if not tag.startswith(TRANSLATION_LANGUAGE_TAG_PREFIX)
+                ],
+                f"{TRANSLATION_LANGUAGE_TAG_PREFIX}{translation_language}",
+            ],
+        ))
+    if source.user_id is None and new_cards:
+        db.add(item)
+        result_item = item
+    else:
+        result_item = source
+    if new_cards:
+        db.commit()
+        db.refresh(result_item)
+    result = _set_to_dict(result_item)
+    result["added_count"] = len(new_cards)
+    result["skipped_count"] = skipped_count
+    return result
+
+
+@router.post("/sets/merge")
+def merge_flashcard_sets(
+    request: FlashcardMergeRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    require_user_rate_limit(
+        current_user,
+        "flashcards:generate",
+        FLASHCARD_GENERATE_PER_HOUR,
+        HOUR,
+    )
+    _get_user_or_404(db, current_user.id)
+    source_sets = [_find_set(db, set_id, current_user.id) for set_id in request.set_ids]
+    if any(item is None for item in source_sets):
+        raise HTTPException(status_code=404, detail="One or more flashcard sets were not found")
+    first, second = source_sets
+    first_language = _translation_language_for_set(first)
+    if _translation_language_for_set(second) != first_language:
+        raise HTTPException(status_code=400, detail="Only sets with the same back language can be merged")
+
+    title = request.title or f"{first.title} + {second.title}"
+    set_id = _unique_set_id(db, title, first.level, current_user.id)
+    merged = models.FlashcardSet(
+        id=set_id,
+        user_id=current_user.id,
+        topic=f"{first.topic} + {second.topic}"[:240],
+        level=first.level,
+        title=title,
+        description=f"Merged from {first.title} and {second.title}.",
+    )
+    used_ids: set[str] = set()
+    seen_fronts: set[str] = set()
+    for source in source_sets:
+        for card in source.cards:
+            normalized_front = card.front.strip().casefold()
+            if normalized_front in seen_fronts:
+                continue
+            seen_fronts.add(normalized_front)
+            public_tags = _card_to_dict(card)["tags"]
+            position = len(merged.cards) + 1
+            merged.cards.append(models.FlashcardCard(
+                card_id=_unique_card_id(card.front, used_ids, position),
+                position=position,
+                front=card.front,
+                back=card.back,
+                example=card.example or "",
+                case_examples=card.case_examples if isinstance(card.case_examples, dict) else {},
+                tense_examples=card.tense_examples if isinstance(card.tense_examples, dict) else {},
+                tags=[*public_tags, f"{TRANSLATION_LANGUAGE_TAG_PREFIX}{first_language}"],
+            ))
+    db.add(merged)
+    db.commit()
+    db.refresh(merged)
+    return _set_to_dict(merged)
+
+
+@router.delete("/sets/{set_id}", status_code=204)
+def delete_flashcard_set(
+    set_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    item = _owned_editable_set(db, set_id, current_user.id)
+    db.query(models.FlashcardReviewState).filter(
+        models.FlashcardReviewState.set_id == set_id,
+    ).delete(synchronize_session=False)
+    db.query(models.FlashcardReviewEvent).filter(
+        models.FlashcardReviewEvent.set_id == set_id,
+    ).delete(synchronize_session=False)
+    db.delete(item)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.put("/sets/{set_id}/cards/{card_id}")
+def update_flashcard(
+    set_id: str,
+    card_id: str,
+    request: FlashcardCardUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    item = _owned_editable_set(db, set_id, current_user.id)
+    card = next((candidate for candidate in item.cards if candidate.card_id == card_id), None)
+    if not card:
+        raise HTTPException(status_code=404, detail="Flashcard not found")
+    front = request.front.strip()
+    back = request.back.strip()
+    if not front or not back:
+        raise HTTPException(status_code=422, detail="The front and back cannot be empty")
+    duplicate = next((
+        candidate for candidate in item.cards
+        if candidate.card_id != card_id and candidate.front.strip().casefold() == front.casefold()
+    ), None)
+    if duplicate:
+        raise HTTPException(status_code=409, detail="A card with this German front already exists")
+
+    language_tag = f"{TRANSLATION_LANGUAGE_TAG_PREFIX}{_translation_language_for_set(item)}"
+    card.front = front
+    card.back = back
+    card.example = (request.example or "").strip()
+    card.case_examples = _string_dict(request.case_examples)
+    card.tense_examples = _string_dict(request.tense_examples)
+    card.tags = [
+        *[
+            tag.strip() for tag in request.tags
+            if tag.strip() and not tag.startswith(TRANSLATION_LANGUAGE_TAG_PREFIX)
+        ],
+        language_tag,
+    ]
+    db.commit()
+    db.refresh(card)
+    return _card_to_dict(card)
+
+
+@router.delete("/sets/{set_id}/cards/{card_id}", status_code=204)
+def delete_flashcard(
+    set_id: str,
+    card_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    item = _owned_editable_set(db, set_id, current_user.id)
+    card = next((candidate for candidate in item.cards if candidate.card_id == card_id), None)
+    if not card:
+        raise HTTPException(status_code=404, detail="Flashcard not found")
+    db.query(models.FlashcardReviewState).filter(
+        models.FlashcardReviewState.set_id == set_id,
+        models.FlashcardReviewState.card_id == card_id,
+    ).delete(synchronize_session=False)
+    db.query(models.FlashcardReviewEvent).filter(
+        models.FlashcardReviewEvent.set_id == set_id,
+        models.FlashcardReviewEvent.card_id == card_id,
+    ).delete(synchronize_session=False)
+    db.delete(card)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/study-session/{set_id}", response_model=FlashcardStudySessionResponse)

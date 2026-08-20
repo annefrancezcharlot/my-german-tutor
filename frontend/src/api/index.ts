@@ -5,9 +5,9 @@ import type {
   ErrorRecord, ErrorStats, Exercise, ExerciseResult,
   TimelineEntry, ExerciseTimelineEntry, ActivityTimelineEntry,
   Message, StyleRewriteMode, StyleRewriteResponse,
-  FlashcardSetSummary, FlashcardSet,
+  Flashcard, FlashcardExtendResult, FlashcardSetSummary, FlashcardSet,
   FlashcardProgress, FlashcardSessionReview,
-  FlashcardStudyMode, FlashcardStudySession,
+  FlashcardGenerateRequest, FlashcardStudyMode, FlashcardStudySession,
   LearningResource, ResourceQuestionsResponse,
   TranslationResponse, TranslationTarget,
   PronunciationFeedbackResponse, TeacherRule, TranscriptionResponse,
@@ -292,9 +292,13 @@ export const retrySessionReview = (sessionId: number): Promise<void> =>
   api.post(`/chat/session/${sessionId}/review/retry`).then(() => undefined);
 
 // ── Audio ────────────────────────────────────────────────────────────────
-export const transcribeAudio = (audio: Blob): Promise<TranscriptionResponse> => {
+export const transcribeAudio = (
+  audio: Blob,
+  purpose: 'conversation' | 'flashcards' = 'conversation',
+): Promise<TranscriptionResponse> => {
   const formData = new FormData();
   formData.append('file', audio, 'recording.webm');
+  formData.append('purpose', purpose);
 
   return api.post('/audio/transcribe', formData).then(r => r.data);
 };
@@ -406,15 +410,40 @@ export const getFlashcardStudySession = (
   }).then(r => r.data);
 
 export const generateFlashcardSet = (
-  topic: string,
-  preciseTopic?: string,
-  count = 12,
+  request: FlashcardGenerateRequest,
 ): Promise<FlashcardSetSummary> =>
   api.post('/flashcards/sets/generate', {
-    topic,
-    precise_topic: preciseTopic,
-    count,
+    topic: request.topic,
+    precise_topic: request.precise_topic,
+    count: request.count ?? 12,
+    terms: request.terms ?? [],
+    translation_language: request.translation_language,
   }).then(r => r.data);
+
+export const extendFlashcardSet = (
+  setId: string,
+  terms: string[],
+): Promise<FlashcardExtendResult> =>
+  api.post(`/flashcards/sets/${setId}/extend`, { terms }).then(r => r.data);
+
+export const mergeFlashcardSets = (
+  setIds: [string, string],
+  title?: string,
+): Promise<FlashcardSet> =>
+  api.post('/flashcards/sets/merge', { set_ids: setIds, title }).then(r => r.data);
+
+export const deleteFlashcardSet = (setId: string): Promise<void> =>
+  api.delete(`/flashcards/sets/${setId}`).then(() => undefined);
+
+export const updateFlashcard = (
+  setId: string,
+  cardId: string,
+  card: Omit<Flashcard, 'id'>,
+): Promise<Flashcard> =>
+  api.put(`/flashcards/sets/${setId}/cards/${cardId}`, card).then(r => r.data);
+
+export const deleteFlashcard = (setId: string, cardId: string): Promise<void> =>
+  api.delete(`/flashcards/sets/${setId}/cards/${cardId}`).then(() => undefined);
 
 export const saveFlashcardSession = (
   setId: string,
