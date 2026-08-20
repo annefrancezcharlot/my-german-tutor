@@ -82,6 +82,43 @@ export interface ChatResponse {
   session_score?: number;
 }
 
+export type DiscussionMode = 'controlled' | 'realtime';
+
+export interface RealtimeCredentials {
+  client_secret: string;
+  model: string;
+  voice: string;
+  max_seconds: number;
+}
+
+export interface ReviewCorrection {
+  id: number;
+  category: string;
+  subcategory?: string;
+  severity: 'light' | 'medium' | 'severe';
+  original: string;
+  corrected: string;
+  explanation: string;
+}
+
+export interface ReviewMistake {
+  message_id: number;
+  original: string;
+  corrected: string;
+  corrections: ReviewCorrection[];
+}
+
+export interface SessionReview {
+  session_id: number;
+  status: 'active' | 'preparing' | 'ready';
+  topic: string;
+  summary?: string;
+  score?: number;
+  estimated_level?: string;
+  mistakes: ReviewMistake[];
+  transcript: Message[];
+}
+
 export interface StyleRewriteItem {
   id?: number;
   message_id: number;

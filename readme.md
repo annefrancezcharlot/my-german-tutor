@@ -5,7 +5,8 @@ After reaching an intermediate level in German, I found myself making the same m
 ## Features
 
 - Chat with your tutor by text or voice about topics that interest you
-- Get corrections and explanations for your mistakes
+- Choose fluid Realtime voice or economical streamed text with optional audio
+- Get corrections and explanations in a detailed review after the conversation
 - Let your tutor keep track of your errors and generate exercises tailored to your needs
 - Have your sentences rewritten in different styles or dialects and listen to them
 - Generate flashcards on topics of your choice
@@ -52,6 +53,19 @@ npm run dev
 
 The frontend uses Vite's `/api` proxy locally. To call a different API, copy
 `frontend/.env.example` to `frontend/.env` and change `VITE_API_URL`.
+
+Realtime voice requires `OPENAI_API_KEY`. Its runtime configuration is:
+
+```bash
+OPENAI_REALTIME_MODEL=gpt-realtime-2.1-mini
+OPENAI_REALTIME_VOICE=marin
+REALTIME_SESSION_MAX_SECONDS=420
+```
+
+The server logs Realtime token usage and estimated USD cost. Pricing defaults to the
+current Mini rates and can be updated without code changes through
+`REALTIME_AUDIO_INPUT_PER_MILLION`, `REALTIME_AUDIO_OUTPUT_PER_MILLION`,
+`REALTIME_TEXT_INPUT_PER_MILLION`, and `REALTIME_TEXT_OUTPUT_PER_MILLION`.
 
 ## Testing
 

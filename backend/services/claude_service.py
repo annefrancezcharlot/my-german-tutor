@@ -78,6 +78,47 @@ Rules:
 - Do not correct language yet.
 - Do not include JSON, markdown, translations, or explanations."""
 
+
+def _build_conversation_reply_prompt(topic: str, level: str) -> str:
+    return f"""You are a warm, concise German conversation partner for a learner at CEFR level {level}.
+
+Topic: {topic}
+
+Keep the conversation natural and moving. Reply only in German, normally in one to three short
+sentences, and ask at most one useful follow-up question. Do not correct, score, explain, or mention
+the learner's mistakes: teaching analysis is handled separately after the conversation."""
+
+
+def _build_message_analysis_prompt(messages: List[Dict[str, Any]], level: str) -> str:
+    payload = json.dumps(messages, ensure_ascii=False, indent=2)
+    return f"""You are an expert German teacher analysing learner messages at CEFR level {level}.
+Analyse every message independently. Ignore capitalization, ordinary typos, and ss versus ß.
+Return ONLY valid JSON with this exact shape:
+{{
+  "messages": [
+    {{
+      "message_id": 123,
+      "has_errors": true,
+      "corrected_user_message": "the complete corrected sentence",
+      "corrections": [
+        {{
+          "category": "grammar|vocabulary|word_order|case|gender|verb_conjugation|preposition|tense|spelling|punctuation|style|other",
+          "subcategory": "specific detail or null",
+          "severity": "light|medium|severe",
+          "original": "exact wrong phrase",
+          "corrected": "correct phrase",
+          "explanation": "clear English explanation"
+        }}
+      ]
+    }}
+  ]
+}}
+If a message has no qualifying error, set has_errors to false, return the original sentence as
+corrected_user_message, and use an empty corrections array. Preserve each numeric message_id.
+
+MESSAGES:
+{payload}"""
+
 EXERCISE_SYSTEM_PROMPT = """You are an expert German language exercise creator for advanced learners (B2-C2).
 Generate exercises that target specific error patterns. Always return valid JSON matching the requested structure exactly.
 - If the only difference between original and corrected text would be ss vs ß, set has_errors to false, corrected_user_message to null, and corrections to [].
@@ -579,6 +620,68 @@ def get_chat_response(
         return _fallback_chat_data(raw_text)
 
     return _normalize_chat_data(data, raw_text)
+
+
+def stream_chat_reply(
+    user_message: str,
+    conversation_history: List[Dict[str, str]],
+    topic: str,
+    level: str = "C1",
+):
+    """Yield a conversational Claude response without running teaching analysis."""
+    messages = conversation_history.copy()
+    messages.append({"role": "user", "content": user_message})
+    with client.messages.stream(
+        model=MODEL,
+        max_tokens=512,
+        system=_build_conversation_reply_prompt(topic, level),
+        messages=messages,
+    ) as stream:
+        yield from stream.text_stream
+
+
+def analyze_message_batch(
+    messages: List[Dict[str, Any]],
+    level: str = "C1",
+) -> List[Dict[str, Any]]:
+    """Analyse up to three learner messages and return normalized per-message results."""
+    if not messages:
+        return []
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=2600,
+        messages=[{
+            "role": "user",
+            "content": _build_message_analysis_prompt(messages, level),
+        }],
+    )
+    raw_text = response.content[0].text.strip()
+    data = _load_jsonish_object(raw_text)
+    raw_results = data.get("messages", [])
+    by_id = {
+        message_id: item
+        for item in raw_results
+        if isinstance(item, dict)
+        and (message_id := _coerce_message_id(item.get("message_id"))) is not None
+    }
+    results = []
+    for message in messages:
+        message_id = int(message["message_id"])
+        original = str(message["content"])
+        item = by_id.get(message_id, {})
+        normalized = _normalize_corrections(item.copy())
+        corrections = normalized.get("corrections", [])
+        has_errors = bool(normalized.get("has_errors") and corrections)
+        corrected = normalized.get("corrected_user_message") if has_errors else original
+        if not isinstance(corrected, str) or not corrected.strip():
+            corrected = original
+        results.append({
+            "message_id": message_id,
+            "has_errors": has_errors,
+            "corrected_user_message": corrected,
+            "corrections": corrections if has_errors else [],
+        })
+    return results
 
 
 def generate_opening_message(topic: str, level: str = "C1") -> str:

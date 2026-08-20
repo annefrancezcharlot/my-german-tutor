@@ -63,9 +63,12 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
   const filteredFreeConversationTopics = activeCategory === 'All'
     ? freeConversationTopics
     : freeConversationTopics.filter(item => (item.category || 'Free discussions') === activeCategory);
-  const showFreeConversationCard =
-    filteredFreeConversationTopics.length > 0;
-
+  const groupedFreeDiscussions = filteredFreeConversationTopics.filter(
+    item => !item.category || item.category === 'Free discussions',
+  );
+  const categorizedFreeTopics = filteredFreeConversationTopics.filter(
+    item => item.category && item.category !== 'Free discussions',
+  );
   const buildSelection = (topic: Topic, starter: ConversationStarter): SelectedConversation => ({
     topicId: topic.id,
     title: topic.title,
@@ -98,10 +101,14 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
     await handleStart(topic, pickRandomStarter(topic), '__random-topic__');
   };
 
-  const buildFreeTopicSelection = (title: string, description = 'Free conversation topic'): SelectedConversation => ({
+  const buildFreeTopicSelection = (
+    title: string,
+    description = 'Free conversation topic',
+    category = 'Free discussions',
+  ): SelectedConversation => ({
     topicId: 'free-topic',
     title,
-    category: 'Free discussions',
+    category,
     description,
     starterId: 'free-topic',
     starterTitle: 'Free topic',
@@ -127,7 +134,7 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
     const title = cleanFreeConversationTitle(item.title);
     navigate('/chat', {
       state: {
-        topic: buildFreeTopicSelection(title, item.description),
+        topic: buildFreeTopicSelection(title, item.description, item.category || 'Free discussions'),
       },
     });
   };
@@ -204,23 +211,24 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
 
       {/* Topic grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {showFreeConversationCard && (
+        {groupedFreeDiscussions.length > 0 && (
           <div
             className={clsx(
               'rounded-xl border p-5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30',
-              CATEGORY_COLORS['Free discussions']
+              CATEGORY_COLORS['Free discussions'],
             )}
           >
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Free discussions
             </div>
-            <h3 className="font-bold text-white text-lg mb-2">Free conversation</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Start again with one of your free conversation topics.
+            <h3 className="mb-2 text-lg font-bold text-white">Free conversation</h3>
+            <p className="mb-4 text-sm text-slate-400">
+              Restart a conversation that was saved without a specific category.
             </p>
             <button
+              type="button"
               onClick={() => setExpandedTopicId(current => current === 'free-conversation' ? null : 'free-conversation')}
-              className="w-full rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-900/60 flex items-center justify-center gap-2"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-900/60"
             >
               <ChevronDown
                 size={16}
@@ -228,17 +236,16 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
               />
               Show free topics
             </button>
-
             {expandedTopicId === 'free-conversation' && (
               <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                {filteredFreeConversationTopics.map(item => (
+                {groupedFreeDiscussions.map(item => (
                   <button
-                    key={`${item.title}-${item.last_used_at}`}
+                    key={item.title}
                     type="button"
                     onClick={() => handleFreeConversationTopicStart(item)}
                     className="block w-full rounded-lg border border-white/10 bg-slate-900/40 p-3 text-left transition-colors hover:bg-slate-900/60"
                   >
-                    <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-white">
                       <MessageSquare size={15} className="text-cyan-300" />
                       {cleanFreeConversationTitle(item.title)}
                     </div>
@@ -248,6 +255,32 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
             )}
           </div>
         )}
+
+        {categorizedFreeTopics.map(item => (
+          <div
+            key={item.title}
+            className={clsx(
+              'rounded-xl border p-5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30',
+              CATEGORY_COLORS[item.category] || CATEGORY_COLORS['Free discussions']
+            )}
+          >
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+              {item.category || 'Free discussions'}
+            </div>
+            <h3 className="font-bold text-white text-lg mb-2">{cleanFreeConversationTitle(item.title)}</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              {item.description || 'Your saved free conversation topic.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => handleFreeConversationTopicStart(item)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+            >
+              <MessageSquare size={16} />
+              Start conversation
+            </button>
+          </div>
+        ))}
 
         {filtered.map(topic => (
           <div

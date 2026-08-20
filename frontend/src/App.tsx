@@ -11,6 +11,7 @@ import { FlashcardsPage } from './components/Flashcards/FlashcardsPage';
 import { ResourcesPage } from './components/Resources/ResourcesPage';
 import { AskTeacherPage } from './components/Teacher/AskTeacherPage';
 import { ProfilePage } from './components/Profile/ProfilePage';
+import { SessionReviewPage } from './components/Review/SessionReviewPage';
 import { createAuthProfile, getAuthMe, refreshAuthSession, setAuthTokenProvider, signIn, signUp } from './api';
 import type { SignUpProfile } from './api';
 import type { User } from './types';
@@ -154,6 +155,7 @@ export default function App() {
               <Route path="/topics" element={<TopicSelector user={user} />} />
               <Route path="/chat" element={<ChatPage user={user} />} />
               <Route path="/chat/:sessionId" element={<ChatPage user={user} />} />
+              <Route path="/sessions/:sessionId/review" element={<SessionReviewPage />} />
               <Route path="/dashboard" element={<Dashboard user={user} />} />
               <Route path="/exercises" element={<ExercisesPage user={user} />} />
               <Route path="/flashcards" element={<FlashcardsPage user={user} />} />

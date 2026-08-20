@@ -6,9 +6,10 @@ import { clsx } from 'clsx';
 interface Props {
   message: Message;
   onSpeak?: (text: string) => void;
+  showFeedback?: boolean;
 }
 
-export const MessageBubble: React.FC<Props> = ({ message, onSpeak }) => {
+export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback = true }) => {
   const [showCorrected, setShowCorrected] = useState(false);
   const isUser = message.role === 'user';
 
@@ -52,7 +53,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak }) => {
         </div>
 
         {/* Error indicator + corrected version */}
-        {isUser && message.has_errors && message.corrected_content && (
+        {showFeedback && isUser && message.has_errors && message.corrected_content && (
           <div className="bg-amber-900/40 border border-amber-700/50 rounded-xl overflow-hidden">
             <button
               onClick={() => setShowCorrected(prev => !prev)}
@@ -73,7 +74,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak }) => {
         )}
 
         {/* No errors badge */}
-        {isUser && message.has_errors === false && (
+        {showFeedback && isUser && message.has_errors === false && (
           <div className="flex items-center justify-end gap-1 text-xs text-green-400">
             <CheckCircle2 size={12} />
             <span>No mistakes</span>

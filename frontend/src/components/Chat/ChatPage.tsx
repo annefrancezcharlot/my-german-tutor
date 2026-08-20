@@ -1,716 +1,454 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Headphones, Keyboard, Loader2, Mic, MicOff, PhoneOff, Send, X } from 'lucide-react';
+import { clsx } from 'clsx';
+
 import {
   createOpeningMessage,
   createSession,
   deleteSession,
   endSession,
+  getFreeConversationTopics,
   getSessionMessages,
   getTopics,
-  sendMessage,
+  streamMessage,
   transcribeAudio,
 } from '../../api';
-import type { User, Message, ErrorDetail, SelectedConversation, Topic } from '../../types';
-import { Mic, MicOff, Send, Loader2, PanelRightOpen, PanelRightClose, X } from 'lucide-react';
-import { MessageBubble } from './MessageBubble';
-import { CorrectionPanel } from './CorrectionPanel';
-import { clsx } from 'clsx';
+import type { DiscussionMode, Message, SelectedConversation, User } from '../../types';
 import { createMediaRecorder, playSpeech, stopMediaStream } from '../../utils/audio';
+import { RealtimeDiscussion, type RealtimeState } from '../../utils/realtime';
+import { MessageBubble } from './MessageBubble';
 
 interface Props { user: User; }
+
+const VOICE_OPTIONS = [
+  'marin',
+  'cedar',
+  'alloy',
+  'ash',
+  'ballad',
+  'coral',
+  'echo',
+  'sage',
+  'shimmer',
+  'verse',
+] as const;
 
 export const ChatPage: React.FC<Props> = ({ user }) => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { topic } = ((location.state as { topic?: SelectedConversation }) || {});
-  const routeSessionId = sessionId && /^\d+$/.test(sessionId) ? Number(sessionId) : null;
-  const hasInvalidRouteSessionId = Boolean(
-    sessionId && (!routeSessionId || !Number.isSafeInteger(routeSessionId))
-  );
+  const routeId = sessionId && /^\d+$/.test(sessionId) ? Number(sessionId) : null;
+  const topicText = topic
+    ? topic.isFreeTopic ? topic.title : `${topic.title}: ${topic.starterTitle}. ${topic.starterPrompt}`
+    : 'German conversation';
 
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(routeId);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [mode, setMode] = useState<DiscussionMode | null>(null);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [lastCorrections, setLastCorrections] = useState<ErrorDetail[]>([]);
-  const [showPanel, setShowPanel] = useState(false);
-  const [ending, setEnding] = useState(false);
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(routeSessionId);
-  const [showCloseModal, setShowCloseModal] = useState(false);
-  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
-  const [sessionScore, setSessionScore] = useState<number | null>(null);
-  const [totalErrors, setTotalErrors] = useState(0);
-  const [messageCount, setMessageCount] = useState(0);
+  const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
-  const [audioError, setAudioError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showClose, setShowClose] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [realtimeState, setRealtimeState] = useState<RealtimeState>('ended');
+  const [assistantDraft, setAssistantDraft] = useState('');
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [topicCategories, setTopicCategories] = useState<string[]>([]);
   const [saveCategoryMode, setSaveCategoryMode] = useState<'existing' | 'free' | 'custom'>('existing');
-  const [selectedSaveCategory, setSelectedSaveCategory] = useState(topic?.category || 'Free discussions');
+  const [selectedSaveCategory, setSelectedSaveCategory] = useState('');
   const [customSaveCategory, setCustomSaveCategory] = useState('');
+  const [selectedVoice, setSelectedVoice] = useState<string>('marin');
 
+  const createdRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const navGuardArmedRef = useRef(false);
-  const openingRequestedRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const microphoneRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
-
-  const conversationTopicText = topic
-    ? topic.isFreeTopic
-      ? topic.title
-      : `${topic.title}: ${topic.starterTitle}. ${topic.starterPrompt}`
-    : undefined;
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const realtimeRef = useRef<RealtimeDiscussion | null>(null);
+  const userTurnsRef = useRef(0);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (!sessionId) return;
-
-    if (hasInvalidRouteSessionId || !routeSessionId) {
-      navigate('/topics', { replace: true });
-      return;
-    }
-
-    if (topic) {
-      setActiveSessionId(routeSessionId);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setAudioError(null);
-    setActiveSessionId(routeSessionId);
-
-    getSessionMessages(routeSessionId)
-      .then((loadedMessages) => {
-        if (cancelled) return;
-        setMessages(loadedMessages);
-        setMessageCount(loadedMessages.filter(message => message.role === 'user').length);
-        setTotalErrors(loadedMessages.filter(message => message.has_errors).length);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          navigate('/topics', { replace: true });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-          inputRef.current?.focus();
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [hasInvalidRouteSessionId, navigate, routeSessionId, sessionId, topic]);
-
-  useEffect(() => {
-    if (!topic || activeSessionId || openingRequestedRef.current) return;
-
-    openingRequestedRef.current = true;
-    setLoading(true);
-    setAudioError(null);
-
-    const startConversation = async () => {
-      try {
-        const session = await createSession(
-          conversationTopicText ?? topic.title,
-          topic.category,
-        );
+    if (activeSessionId || createdRef.current || !topic) return;
+    createdRef.current = true;
+    setBusy(true);
+    createSession(topicText, topic.category)
+      .then(session => {
         setActiveSessionId(session.id);
         navigate(`/chat/${session.id}`, { replace: true, state: { topic } });
-
-        const opening = await createOpeningMessage(session.id);
-        setMessages([{ role: 'assistant', content: opening.reply }]);
-      } catch {
-        setMessages([
-          { role: 'assistant', content: 'Ich konnte das Gespräch gerade nicht starten. Versuch es bitte noch einmal.' },
-        ]);
-      } finally {
-        setLoading(false);
-        inputRef.current?.focus();
-      }
-    };
-
-    startConversation();
-  }, [activeSessionId, conversationTopicText, navigate, topic, user.id]);
+      })
+      .catch(() => setError('The conversation could not be created.'))
+      .finally(() => setBusy(false));
+  }, [activeSessionId, navigate, topic, topicText]);
 
   useEffect(() => {
-    getTopics()
-      .then((items: Topic[]) => {
-        const categories = Array.from(new Set(items.map(item => item.category))).sort();
+    if (!routeId || topic) return;
+    setBusy(true);
+    getSessionMessages(routeId)
+      .then(loaded => {
+        setMessages(loaded);
+        userTurnsRef.current = loaded.filter(message => message.role === 'user').length;
+      })
+      .catch(() => navigate('/topics', { replace: true }))
+      .finally(() => setBusy(false));
+  }, [navigate, routeId, topic]);
+
+  useEffect(() => {
+    if (!topic?.isFreeTopic) return;
+    Promise.all([getTopics(), getFreeConversationTopics().catch(() => [])])
+      .then(([predefined, saved]) => {
+        const categories = Array.from(new Set([
+          ...predefined.map(item => item.category),
+          ...saved.map(item => item.category),
+        ].filter(Boolean))).sort();
         setTopicCategories(categories);
-        if (!topic?.category || topic.category === 'Free discussions') {
-          setSelectedSaveCategory(categories[0] ?? 'Free discussions');
-        }
+        setSelectedSaveCategory(current => current || categories[0] || 'Free discussions');
       })
       .catch(() => {
         setTopicCategories([]);
+        setSelectedSaveCategory('Free discussions');
       });
-  }, [topic?.category]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (messageCount === 0 || ending) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [messageCount, ending]);
+  }, [topic?.isFreeTopic]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
-
-  useEffect(() => {
-    return () => {
-      stopMediaStream(streamRef.current);
-    };
+  }, [messages, assistantDraft]);
+  useEffect(() => () => {
+    streamAbortRef.current?.abort();
+    realtimeRef.current?.stop();
+    stopMediaStream(microphoneRef.current);
   }, []);
 
   useEffect(() => {
-    if (messageCount === 0 || ending) return;
+    if (mode !== 'realtime' || remainingSeconds === null || remainingSeconds <= 0) return;
+    const id = window.setInterval(() => setRemainingSeconds(value => value == null ? null : Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(id);
+  }, [mode, remainingSeconds === null]);
 
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      ) {
-        return;
+  const startControlled = async () => {
+    if (!activeSessionId) return;
+    realtimeRef.current?.stop();
+    realtimeRef.current = null;
+    setMode('controlled');
+    setError(null);
+    if (messages.length === 0) {
+      setBusy(true);
+      try {
+        const opening = await createOpeningMessage(activeSessionId);
+        setMessages([{ role: 'assistant', content: opening.reply }]);
+      } catch {
+        setError('The opening message could not be generated.');
+      } finally {
+        setBusy(false);
       }
-
-      const target = event.target as HTMLElement | null;
-      const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
-      if (!anchor) return;
-
-      const nextUrl = new URL(anchor.href, window.location.origin);
-      const currentUrl = new URL(window.location.href);
-
-      if (
-        nextUrl.origin !== currentUrl.origin ||
-        nextUrl.pathname === currentUrl.pathname &&
-        nextUrl.search === currentUrl.search &&
-        nextUrl.hash === currentUrl.hash
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      setPendingRoute(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-      setShowCloseModal(true);
-    };
-
-    const handlePopState = () => {
-      if (!navGuardArmedRef.current || ending || messageCount === 0) return;
-      navGuardArmedRef.current = false;
-      setPendingRoute('__back__');
-      setShowCloseModal(true);
-    };
-
-    document.addEventListener('click', handleDocumentClick, true);
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      document.removeEventListener('click', handleDocumentClick, true);
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [ending, location.pathname, messageCount]);
-
-  useEffect(() => {
-    if (messageCount > 0 && !navGuardArmedRef.current) {
-      window.history.pushState({ chatGuard: true }, '', window.location.href);
-      navGuardArmedRef.current = true;
     }
-  }, [messageCount]);
+  };
 
-  /* ── Send message ───────────────────────────────────────────────── */
-  const sendText = async (text: string) => {
-    if (!text.trim() || loading) return;
-    const userText = text.trim();
-    setInput('');
-    setAudioError(null);
+  const closeRealtimeAtLimit = async () => {
+    setError('The seven-minute voice limit was reached. Preparing your review…');
+    await finishSession();
+  };
 
-    const userMsg: Message = { role: 'user', content: userText };
-    setMessages(prev => [...prev, userMsg]);
-    setLoading(true);
-
+  const startRealtime = async () => {
+    if (!activeSessionId) return;
+    setMode('realtime');
+    setError(null);
+    const connection = new RealtimeDiscussion(activeSessionId, messages.length, selectedVoice, {
+      onState: setRealtimeState,
+      onTranscript: message => {
+        if (message.role === 'user') userTurnsRef.current += 1;
+        setMessages(previous => [...previous, message]);
+      },
+      onAssistantDraft: setAssistantDraft,
+      onError: message => setError(message),
+      onTimeout: () => void closeRealtimeAtLimit(),
+      onLimit: setRemainingSeconds,
+    });
+    realtimeRef.current = connection;
     try {
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const response = await sendMessage(
-        activeSessionId,
-        userText,
-        history,
-        conversationTopicText,
-        topic?.category,
-      );
-      if (!activeSessionId) {
-        setActiveSessionId(response.session_id);
-        navigate(`/chat/${response.session_id}`, { replace: true, state: { topic } });
-      }
+      await connection.start();
+    } catch (startError) {
+      if (startError instanceof Error && startError.name === 'AbortError') return;
+      await startControlled();
+      setError('Live voice was unavailable, so this session reopened in controlled mode.');
+    }
+  };
 
-      // Update user message with correction metadata
-      setMessages(prev => {
-        const updated = [...prev];
-        const lastUserIdx = [...updated].reverse().findIndex(m => m.role === 'user');
-        if (lastUserIdx !== -1) {
-          const realIdx = updated.length - 1 - lastUserIdx;
-          updated[realIdx] = {
-            ...updated[realIdx],
-            has_errors: response.has_errors,
-            corrected_content: response.corrected_user_message ?? undefined,
-          };
-        }
-        return [
-          ...updated,
-          { role: 'assistant', content: response.reply },
-        ];
-      });
-
-      if (response.corrections.length > 0) {
-        setLastCorrections(response.corrections);
-        setShowPanel(true);
-        setTotalErrors(prev => prev + response.corrections.length);
-      } else {
-        setLastCorrections([]);
-      }
-
-      if (response.session_score != null) {
-        setSessionScore(prev =>
-          prev === null
-            ? response.session_score!
-            : Math.round((prev + response.session_score!) / 2)
+  const sendText = async (raw: string) => {
+    const text = raw.trim();
+    if (!text || busy || !activeSessionId || mode !== 'controlled') return;
+    setInput('');
+    setError(null);
+    setMessages(previous => [...previous, { role: 'user', content: text }, { role: 'assistant', content: '' }]);
+    setBusy(true);
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    let persistedUserMessageId: number | undefined;
+    const handlers = {
+      onSession: (data: { user_message_id: number }) => {
+        if (persistedUserMessageId === undefined) userTurnsRef.current += 1;
+        persistedUserMessageId = data.user_message_id;
+      },
+      onDelta: (delta: string) => setMessages(previous => {
+        const next = [...previous];
+        const last = next.length - 1;
+        next[last] = { ...next[last], content: next[last].content + delta };
+        return next;
+      }),
+      onError: setError,
+    };
+    try {
+      try {
+        await streamMessage(activeSessionId, text, controller.signal, handlers);
+      } catch {
+        if (!persistedUserMessageId || controller.signal.aborted) throw new Error('stream stopped');
+        setMessages(previous => {
+          const next = [...previous];
+          next[next.length - 1] = { ...next[next.length - 1], content: '' };
+          return next;
+        });
+        await streamMessage(
+          activeSessionId,
+          text,
+          controller.signal,
+          handlers,
+          persistedUserMessageId,
         );
       }
-      setMessageCount(prev => prev + 1);
-    } catch {
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: 'Something went wrong. Please try again.' },
-      ]);
+    } catch (streamError) {
+      if (!controller.signal.aborted) setError('The response stream stopped. Your message was saved; try again.');
     } finally {
-      setLoading(false);
-      inputRef.current?.focus();
+      streamAbortRef.current = null;
+      setBusy(false);
     }
   };
 
-  const handleSend = async () => {
-    await sendText(input);
-  };
-
-  const startRecording = async () => {
-    if (recording || transcribing || loading) return;
-
-    setAudioError(null);
+  const toggleRecording = async () => {
+    if (recording) {
+      recorderRef.current?.stop();
+      setRecording(false);
+      return;
+    }
+    if (busy || transcribing) return;
     try {
       const { recorder, stream, chunks } = await createMediaRecorder();
       recorderRef.current = recorder;
-      streamRef.current = stream;
+      microphoneRef.current = stream;
       chunksRef.current = chunks;
-
       recorder.onstop = async () => {
-        const audioBlob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
-        });
-        stopMediaStream(streamRef.current);
-        streamRef.current = null;
-        recorderRef.current = null;
-        chunksRef.current = [];
-        setRecording(false);
-
-        if (audioBlob.size === 0) return;
-
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        stopMediaStream(microphoneRef.current);
+        microphoneRef.current = null;
         setTranscribing(true);
         try {
-          const result = await transcribeAudio(audioBlob);
-          if (result.text.trim()) {
-            await sendText(result.text);
-          } else {
-            setAudioError('No speech detected.');
-          }
+          const result = await transcribeAudio(blob);
+          await sendText(result.text);
         } catch {
-          setAudioError('Audio could not be transcribed.');
+          setError('Audio could not be transcribed.');
         } finally {
           setTranscribing(false);
         }
       };
-
       recorder.start(250);
       setRecording(true);
     } catch {
-      setAudioError('Microphone could not be started.');
-      stopMediaStream(streamRef.current);
-      streamRef.current = null;
-      recorderRef.current = null;
-      setRecording(false);
+      setError('Microphone access failed.');
     }
   };
 
-  const stopRecording = () => {
-    if (recorderRef.current?.state === 'recording') {
-      recorderRef.current.requestData();
-      recorderRef.current.stop();
+  const finishSession = async () => {
+    if (!activeSessionId || busy) return;
+    setBusy(true);
+    streamAbortRef.current?.abort();
+    if (realtimeRef.current) {
+      realtimeRef.current.stop();
+      await realtimeRef.current.flush(5000);
+      realtimeRef.current = null;
     }
-    setRecording(false);
-  };
-
-  const toggleRecording = () => {
-    if (recording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
-  /* ── End session ─────────────────────────────────────────────────── */
-  const handleSaveAndClose = async () => {
-    if (ending) return;
-    if (messageCount === 0 || !activeSessionId) {
-      if (pendingRoute === '__back__') {
-        window.history.back();
-      } else if (pendingRoute) {
-        navigate(pendingRoute);
-      } else {
-        navigate('/topics');
-      }
-      setPendingRoute(null);
-      setShowCloseModal(false);
-      return;
-    }
-
-    setEnding(true);
     try {
-      const categoryToSave =
-        saveCategoryMode === 'free'
+      if (userTurnsRef.current === 0) {
+        await deleteSession(activeSessionId);
+        navigate('/topics');
+        return;
+      }
+      const saveCategory = topic?.isFreeTopic
+        ? saveCategoryMode === 'free'
           ? 'Free discussions'
           : saveCategoryMode === 'custom'
             ? customSaveCategory.trim() || 'Free discussions'
-            : selectedSaveCategory;
-      const result = await endSession(activeSessionId, categoryToSave);
-      if (pendingRoute === '__back__') {
-        navigate('/dashboard', { state: { sessionSummary: result } });
-      } else if (pendingRoute) {
-        navigate(pendingRoute, {
-          state: pendingRoute === '/dashboard' ? { sessionSummary: result } : undefined,
-        });
-      } else {
-        navigate('/dashboard', { state: { sessionSummary: result } });
-      }
-    } finally {
-      setEnding(false);
-      setShowCloseModal(false);
-      setPendingRoute(null);
+            : selectedSaveCategory || 'Free discussions'
+        : topic?.category;
+      await endSession(activeSessionId, saveCategory);
+      navigate(`/sessions/${activeSessionId}/review`, { replace: true });
+    } catch {
+      setError('The session could not be closed. Please retry.');
+      setBusy(false);
+      setShowClose(false);
     }
   };
 
-  const handleDiscardAndClose = async () => {
-    if (ending) return;
-
-    setEnding(true);
-    try {
-      if (activeSessionId) {
-        await deleteSession(activeSessionId);
-      }
-      if (pendingRoute === '__back__') {
-        window.history.back();
-      } else if (pendingRoute) {
-        navigate(pendingRoute);
-      } else {
-        navigate('/topics');
-      }
-    } finally {
-      setEnding(false);
-      setShowCloseModal(false);
-      setPendingRoute(null);
-    }
+  const discardSession = async () => {
+    if (!activeSessionId) return navigate('/topics');
+    setBusy(true);
+    realtimeRef.current?.stop();
+    await deleteSession(activeSessionId);
+    navigate('/topics');
   };
 
-  const handleCloseModal = () => {
-    if (messageCount > 0 && !navGuardArmedRef.current) {
-      window.history.pushState({ chatGuard: true }, '', window.location.href);
-      navGuardArmedRef.current = true;
-    }
-    setShowCloseModal(false);
-    setPendingRoute(null);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  /* ── Score colour helper ─────────────────────────────────────────── */
-  const scoreColour = (s: number) =>
-    s >= 80 ? 'text-green-400' : s >= 60 ? 'text-yellow-400' : 'text-red-400';
+  const statusLabel = realtimeState === 'connecting' ? 'Connecting…'
+    : realtimeState === 'speaking' ? 'Tutor speaking — interrupt at any time'
+      : realtimeState === 'thinking' ? 'Thinking…' : 'Listening';
 
   return (
-    <div className="flex gap-4" style={{ height: 'calc(100vh - 8rem)' }}>
+    <div className="mx-auto flex max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800" style={{ height: 'calc(100vh - 8rem)' }}>
+      <header className="flex items-center justify-between border-b border-slate-700 bg-slate-900 px-5 py-3">
+        <div>
+          <div className="font-semibold text-white">{topic?.title ?? 'Conversation'}</div>
+          <div className="text-xs text-slate-400">{user.level} · Feedback stays hidden until the review</div>
+        </div>
+        <div className="flex items-center gap-3">
+          {mode === 'controlled' && (
+            <label className="hidden items-center gap-2 text-xs text-slate-400 sm:flex">
+              Voice
+              <select
+                value={selectedVoice}
+                onChange={event => setSelectedVoice(event.target.value)}
+                className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs capitalize text-white outline-none focus:border-blue-500"
+              >
+                {VOICE_OPTIONS.map(voice => <option key={voice} value={voice}>{voice}</option>)}
+              </select>
+            </label>
+          )}
+          <button onClick={() => setShowClose(true)} className="rounded-lg bg-red-700 px-4 py-2 text-sm hover:bg-red-600">Close</button>
+        </div>
+      </header>
 
-      {/* ── Main chat column ─────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden min-w-0">
-
-        {/* Header */}
-        <div className="bg-slate-900 border-b border-slate-700 px-5 py-3 flex items-center justify-between shrink-0">
-          <div className="min-w-0">
-            <div className="font-semibold text-white truncate">
-              {topic?.title ?? 'Conversation'}
+      {!mode ? (
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="w-full max-w-2xl">
+            <h1 className="text-center text-2xl font-semibold">How would you like to talk?</h1>
+            <p className="mt-2 text-center text-sm text-slate-400">Both modes receive the same detailed review after the session.</p>
+            <div className="mx-auto mt-6 max-w-xs">
+              <label className="block text-sm font-medium text-slate-200" htmlFor="discussion-voice">Tutor voice</label>
+              <select
+                id="discussion-voice"
+                value={selectedVoice}
+                onChange={event => setSelectedVoice(event.target.value)}
+                disabled={busy}
+                className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm capitalize text-white outline-none focus:border-blue-500 disabled:opacity-40"
+              >
+                {VOICE_OPTIONS.map(voice => <option key={voice} value={voice}>{voice}</option>)}
+              </select>
+              <p className="mt-1.5 text-xs text-slate-500">Used for live voice and optional text-to-speech. Voices are AI-generated.</p>
             </div>
-            <div className="text-xs text-slate-400">
-              {topic?.category} &nbsp;·&nbsp; {user.level} &nbsp;·&nbsp;
-              {messageCount} messages &nbsp;·&nbsp;
-              <span className="text-amber-400">{totalErrors} mistakes</span>
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              <button onClick={startRealtime} disabled={!activeSessionId || busy} className="rounded-2xl border border-cyan-600/60 bg-cyan-950/40 p-6 text-left hover:bg-cyan-950/70 disabled:opacity-40">
+                <Headphones className="mb-4 text-cyan-300" />
+                <div className="font-semibold">Fluid voice</div>
+                <div className="mt-2 text-sm text-slate-300">Natural hands-free speech, automatic turns and interruptions. Voice only, up to seven minutes.</div>
+              </button>
+              <button onClick={startControlled} disabled={!activeSessionId || busy} className="rounded-2xl border border-blue-600/60 bg-blue-950/40 p-6 text-left hover:bg-blue-950/70 disabled:opacity-40">
+                <Keyboard className="mb-4 text-blue-300" />
+                <div className="font-semibold">Controlled</div>
+                <div className="mt-2 text-sm text-slate-300">Type or push to talk. Fast streamed text replies; audio playback only when requested.</div>
+              </button>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0 ml-4">
-            {/* Rolling score */}
-            {sessionScore !== null && (
-              <div className="text-sm hidden sm:flex items-center gap-1">
-                <span className="text-slate-400">Current score:</span>
-                <span className={clsx('font-bold', scoreColour(sessionScore))}>
-                  {Math.round(sessionScore)}
-                </span>
-              </div>
-            )}
-
-            {/* Toggle correction panel */}
-            <button
-              onClick={() => setShowPanel(p => !p)}
-              title="Corrections"
-              className={clsx(
-                'p-2 rounded-lg transition-colors',
-                showPanel
-                  ? 'bg-amber-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-              )}
-            >
-              {showPanel
-                ? <PanelRightClose size={18} />
-                : <PanelRightOpen size={18} />}
-            </button>
-
-            {/* End button */}
-            <button
-              onClick={() => setShowCloseModal(true)}
-              disabled={ending}
-              className="bg-red-700 hover:bg-red-600 disabled:opacity-40 text-white text-sm px-4 py-1.5 rounded-lg flex items-center gap-2 transition-colors"
-            >
-              {ending && <Loader2 size={14} className="animate-spin" />}
-              Close
-            </button>
+            {error && <p className="mt-5 text-center text-sm text-red-300">{error}</p>}
           </div>
         </div>
-
-        {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {messages.map((msg, idx) => (
-            <MessageBubble
-              key={idx}
-              message={msg}
-              onSpeak={!loading ? text => {
-                playSpeech(text, {
-                  style: 'natural conversational German',
-                }).catch(() => setAudioError('Audio could not be played.'));
-              } : undefined}
-            />
-          ))}
-
-          {loading && (
-            <div className="flex items-center gap-2 text-slate-400 pl-1">
-              <Loader2 size={16} className="animate-spin" />
-              <span className="text-sm italic">Claude is writing...</span>
+      ) : mode === 'realtime' ? (
+        <div className="flex flex-1 flex-col items-center justify-center p-6">
+          <div className={clsx('flex h-36 w-36 items-center justify-center rounded-full border-4 transition-all', realtimeState === 'speaking' ? 'animate-pulse border-cyan-400 bg-cyan-500/20' : 'border-blue-400 bg-blue-500/10')}>
+            {realtimeState === 'connecting' ? <Loader2 className="animate-spin" size={44} /> : <Mic size={44} />}
+          </div>
+          <div className="mt-5 text-lg font-medium">{statusLabel}</div>
+          {remainingSeconds !== null && <div className="mt-1 text-sm text-slate-400">{Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')} remaining</div>}
+          {error && <div className="mt-4 rounded-lg bg-red-950/60 px-4 py-2 text-sm text-red-200">{error}</div>}
+          <button onClick={() => setShowTranscript(value => !value)} className="mt-6 text-sm text-cyan-300 hover:text-cyan-200">{showTranscript ? 'Hide transcript' : 'Show transcript'}</button>
+          {showTranscript && (
+            <div className="mt-3 max-h-52 w-full max-w-xl overflow-y-auto rounded-xl bg-slate-900 p-4">
+              {messages.map((message, index) => <p key={message.id ?? index} className="mb-2 text-sm"><span className="font-semibold text-slate-400">{message.role === 'user' ? 'You' : 'Tutor'}:</span> {message.content}</p>)}
+              {assistantDraft && <p className="text-sm text-slate-300"><span className="font-semibold text-slate-400">Tutor:</span> {assistantDraft}</p>}
             </div>
           )}
-          <div ref={bottomRef} />
+          <button onClick={() => setShowClose(true)} className="mt-8 flex items-center gap-2 rounded-xl bg-red-700 px-5 py-3 hover:bg-red-600"><PhoneOff size={18} /> End voice session</button>
         </div>
-
-        {/* Input bar */}
-        <div className="border-t border-slate-700 p-4 shrink-0 bg-slate-900">
-          <div className="flex gap-3 items-end">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Write in German... (Enter to send · Shift+Enter for a line break)"
-              rows={2}
-              disabled={loading || transcribing}
-              className="flex-1 bg-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none border border-slate-600 focus:outline-none focus:border-blue-500 transition-colors leading-relaxed"
-            />
-            <button
-              type="button"
-              onClick={toggleRecording}
-              disabled={loading || transcribing}
-              title={recording ? 'Stop recording' : 'Record voice message'}
-              className={clsx(
-                'p-3 rounded-xl transition-colors shrink-0',
-                recording
-                  ? 'bg-red-600 text-white hover:bg-red-500'
-                  : 'bg-slate-700 text-slate-200 hover:bg-slate-600',
-                (loading || transcribing) && 'cursor-not-allowed opacity-40',
-              )}
-            >
-              {transcribing
-                ? <Loader2 size={18} className="animate-spin" />
-                : recording
-                  ? <MicOff size={18} />
-                  : <Mic size={18} />}
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!input.trim() || loading || transcribing}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white p-3 rounded-xl transition-colors shrink-0"
-            >
-              <Send size={18} />
-            </button>
+      ) : (
+        <>
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            {messages.map((message, index) => (
+              <MessageBubble key={message.id ?? index} message={message} showFeedback={false} onSpeak={message.role === 'assistant' && !busy ? text => void playSpeech(text, { voice: selectedVoice }).catch(() => setError('Audio could not be played.')) : undefined} />
+            ))}
+            {busy && <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={15} className="animate-spin" /> Claude is writing…</div>}
+            <div ref={bottomRef} />
           </div>
-          <div className={clsx(
-            'text-xs mt-1.5 pl-1',
-            audioError ? 'text-red-300' : recording ? 'text-red-300' : 'text-slate-500',
-          )}>
-            {audioError || (recording
-              ? 'Recording... click again to send.'
-              : transcribing
-                ? 'Transcribing audio...'
-                : 'Tip: Write or speak full sentences for better feedback.')}
+          <div className="border-t border-slate-700 bg-slate-900 p-4">
+            <div className="flex items-end gap-3">
+              <textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(input); } }} disabled={busy || transcribing} rows={2} placeholder="Write in German…" className="flex-1 resize-none rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+              <button onClick={toggleRecording} disabled={busy || transcribing} className={clsx('rounded-xl p-3', recording ? 'bg-red-600' : 'bg-slate-700', (busy || transcribing) && 'opacity-40')} title="Push to talk">{transcribing ? <Loader2 size={18} className="animate-spin" /> : recording ? <MicOff size={18} /> : <Mic size={18} />}</button>
+              <button onClick={() => void sendText(input)} disabled={!input.trim() || busy || transcribing} className="rounded-xl bg-blue-600 p-3 disabled:opacity-40"><Send size={18} /></button>
+            </div>
+            <div className={clsx('mt-2 text-xs', error ? 'text-red-300' : 'text-slate-500')}>{error ?? (recording ? 'Recording… press again to send.' : 'Type or push to talk. Use the speaker button only when you want audio.')}</div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Correction side panel ─────────────────────────────────────── */}
-      {showPanel && (
-        <CorrectionPanel
-          corrections={lastCorrections}
-          onClose={() => setShowPanel(false)}
-        />
+        </>
       )}
 
-      {showCloseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <div className="mb-3 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Close conversation?</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  {messageCount > 0
-                    ? 'Would you like to save or discard this conversation?'
-                    : 'This conversation has no messages from you yet and will not be saved.'}
-                </p>
-              </div>
-              <button
-                onClick={handleCloseModal}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
-              {messageCount > 0 && (
-                <div className="mb-2 w-full rounded-xl border border-slate-700 bg-slate-800 p-3">
-                  <div className="mb-2 text-sm font-semibold text-white">Save under</div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <button
-                      type="button"
-                      onClick={() => setSaveCategoryMode('existing')}
-                      className={clsx(
-                        'rounded-lg px-3 py-2 text-sm transition-colors',
-                        saveCategoryMode === 'existing'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-700'
-                      )}
-                    >
-                      Existing category
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSaveCategoryMode('free')}
-                      className={clsx(
-                        'rounded-lg px-3 py-2 text-sm transition-colors',
-                        saveCategoryMode === 'free'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-700'
-                      )}
-                    >
-                      Free discussions
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSaveCategoryMode('custom')}
-                      className={clsx(
-                        'rounded-lg px-3 py-2 text-sm transition-colors',
-                        saveCategoryMode === 'custom'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-700'
-                      )}
-                    >
-                      New category
-                    </button>
-                  </div>
-
-                  {saveCategoryMode === 'existing' && (
-                    <select
-                      value={selectedSaveCategory}
-                      onChange={event => setSelectedSaveCategory(event.target.value)}
-                      className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                    >
-                      {topicCategories.map(category => (
-                        <option key={category} value={category}>{category}</option>
-                      ))}
-                      {topicCategories.length === 0 && (
-                        <option value="Free discussions">Free discussions</option>
-                      )}
-                    </select>
-                  )}
-
-                  {saveCategoryMode === 'custom' && (
-                    <input
-                      value={customSaveCategory}
-                      onChange={event => setCustomSaveCategory(event.target.value)}
-                      placeholder="New category name"
-                      className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
-                    />
-                  )}
+      {showClose && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6">
+            <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">End this conversation?</h2><p className="mt-1 text-sm text-slate-400">Saving opens the review immediately while analysis finishes in the background.</p></div><button onClick={() => setShowClose(false)}><X size={18} /></button></div>
+            {topic?.isFreeTopic && userTurnsRef.current > 0 && (
+              <div className="mt-5 rounded-xl border border-slate-700 bg-slate-800 p-4">
+                <div className="text-sm font-semibold text-white">Save this free topic under</div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaveCategoryMode('existing')}
+                    className={clsx('rounded-lg px-2 py-2 text-xs transition-colors', saveCategoryMode === 'existing' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700')}
+                  >
+                    Existing category
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSaveCategoryMode('free')}
+                    className={clsx('rounded-lg px-2 py-2 text-xs transition-colors', saveCategoryMode === 'free' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700')}
+                  >
+                    Free discussions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSaveCategoryMode('custom')}
+                    className={clsx('rounded-lg px-2 py-2 text-xs transition-colors', saveCategoryMode === 'custom' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700')}
+                  >
+                    New category
+                  </button>
                 </div>
-              )}
-
-              <button
-                onClick={handleCloseModal}
-                disabled={ending}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              {messageCount > 0 && (
-                <button
-                  onClick={handleDiscardAndClose}
-                  disabled={ending}
-                  className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-white transition-colors hover:bg-slate-600 disabled:opacity-50"
-                >
-                  Do not save
-                </button>
-              )}
-              <button
-                onClick={messageCount > 0 ? handleSaveAndClose : handleDiscardAndClose}
-                disabled={ending}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
-              >
-                {messageCount > 0 ? 'Save' : 'Close'}
-              </button>
-            </div>
+                {saveCategoryMode === 'existing' && (
+                  <select
+                    value={selectedSaveCategory}
+                    onChange={event => setSelectedSaveCategory(event.target.value)}
+                    className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                  >
+                    {topicCategories.map(category => <option key={category} value={category}>{category}</option>)}
+                    {topicCategories.length === 0 && <option value="Free discussions">Free discussions</option>}
+                  </select>
+                )}
+                {saveCategoryMode === 'custom' && (
+                  <input
+                    value={customSaveCategory}
+                    onChange={event => setCustomSaveCategory(event.target.value)}
+                    maxLength={120}
+                    placeholder="New category name"
+                    className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                  />
+                )}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowClose(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">Cancel</button><button onClick={() => void discardSession()} disabled={busy} className="rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-40">Discard</button><button onClick={() => void finishSession()} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{busy ? 'Closing…' : 'Save & review'}</button></div>
           </div>
         </div>
       )}

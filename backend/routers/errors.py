@@ -7,6 +7,7 @@ import schemas
 from auth import CurrentUser, get_current_user
 from database import get_db
 from services.scoring import count_words
+from services.discussion_analysis import public_error_context
 
 router = APIRouter(prefix="/errors", tags=["errors"])
 
@@ -28,7 +29,13 @@ def get_user_errors(
     )
     if category:
         q = q.filter(models.ErrorRecord.category == category)
-    return q.order_by(models.ErrorRecord.created_at.desc()).limit(limit).all()
+    records = q.order_by(models.ErrorRecord.created_at.desc()).limit(limit).all()
+    return [
+        schemas.ErrorRecordResponse.model_validate(record).model_copy(
+            update={"context": public_error_context(record.context)}
+        )
+        for record in records
+    ]
 
 
 @router.get("/me/stats", response_model=List[schemas.ErrorStats])

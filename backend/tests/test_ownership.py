@@ -270,6 +270,25 @@ def test_end_session_hides_another_users_session(client, seeded_data):
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize(
+    ("method", "suffix", "payload"),
+    [
+        ("post", "realtime-credentials", None),
+        ("post", "transcript", {"sequence": 0, "role": "user", "content": "Hallo"}),
+        ("post", "realtime-usage", {"input_audio_tokens": 1}),
+        ("get", "review", None),
+        ("post", "review/retry", None),
+    ],
+)
+def test_new_discussion_endpoints_enforce_session_ownership(
+    client, seeded_data, method, suffix, payload,
+):
+    _act_as(client, USER_B_ID)
+    url = f"/chat/session/{seeded_data['session_id']}/{suffix}"
+    response = getattr(client, method)(url, json=payload) if payload is not None else getattr(client, method)(url)
+    assert response.status_code == 404
+
+
 def test_submit_exercise_hides_another_users_exercise(client, seeded_data):
     _act_as(client, USER_B_ID)
 

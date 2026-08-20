@@ -21,10 +21,51 @@ import auth
 import database
 import models
 import rate_limits
+from routers.chat import (
+    _build_realtime_instructions,
+    _build_realtime_transcription,
+    _build_realtime_turn_detection,
+)
 from main import app
 
 
 USER_ID = UUID("33333333-3333-4333-8333-333333333333")
+
+
+def test_realtime_prompt_uses_topic_and_natural_turn_taking():
+    instructions = _build_realtime_instructions("Wohnungssuche in Zürich", "B2")
+
+    assert "<topic>Wohnungssuche in Zürich</topic>" in instructions
+    assert "CEFR level B2" in instructions
+    assert "one short sentence per turn" in instructions
+    assert "no more than 20 spoken words" in instructions
+    assert "Do not ask a question in every turn" in instructions
+    assert "Ask at most one short question" in instructions
+    assert "stop speaking and wait" in instructions
+    assert "not an interviewer" in instructions
+
+
+def test_realtime_vad_uses_balanced_turn_timing():
+    turn_detection = _build_realtime_turn_detection()
+
+    assert turn_detection == {
+        "type": "semantic_vad",
+        "eagerness": "medium",
+        "create_response": True,
+        "interrupt_response": True,
+    }
+
+
+def test_realtime_transcription_preserves_learner_wording():
+    transcription = _build_realtime_transcription("Wohnungssuche in Zürich")
+
+    assert transcription["model"] == "gpt-4o-transcribe"
+    assert transcription["language"] == "de"
+    assert "<topic>Wohnungssuche in Zürich</topic>" in transcription["prompt"]
+    assert "verbatim German transcript" in transcription["prompt"]
+    assert "grammatical mistakes" in transcription["prompt"]
+    assert "Do not correct" in transcription["prompt"]
+    assert "paraphrase" in transcription["prompt"]
 
 
 @pytest.fixture(autouse=True)
@@ -189,6 +230,26 @@ def test_sessions_router_basic_flow(client, user, seeded_session):
     assert messages.json()[0]["content"] == "Ich suche eine Wohnung."
 
 
+def test_saved_free_topics_keep_custom_category_for_topic_cards(client, db_session, user):
+    from datetime import datetime, timezone
+
+    session = models.ConversationSession(
+        user_id=user.id,
+        topic="Urban gardening",
+        topic_category="My interests",
+        message_count=2,
+        ended_at=datetime.now(timezone.utc),
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    response = client.get("/sessions/free-conversation-topics")
+
+    assert response.status_code == 200
+    assert response.json()[0]["title"] == "Urban gardening"
+    assert response.json()[0]["category"] == "My interests"
+
+
 def test_chat_router_with_mocked_llm(client, user, seeded_session, monkeypatch):
     monkeypatch.setattr("routers.chat.generate_opening_message", lambda topic, level: "Guten Tag!")
     monkeypatch.setattr(
@@ -204,6 +265,7 @@ def test_chat_router_with_mocked_llm(client, user, seeded_session, monkeypatch):
         "routers.chat.generate_session_summary",
         lambda **kwargs: {"summary": "Good practice session.", "estimated_level": "B2"},
     )
+    monkeypatch.setattr("routers.chat.finalize_session_review", lambda *args, **kwargs: None)
 
     empty_session = client.post(
         "/sessions/",
@@ -227,7 +289,148 @@ def test_chat_router_with_mocked_llm(client, user, seeded_session, monkeypatch):
 
     ended = client.post(f"/chat/session/{seeded_session.id}/end")
     assert ended.status_code == 200
-    assert ended.json()["summary"] == "Good practice session."
+    assert ended.json()["review_status"] == "preparing"
+
+
+def test_streamed_chat_persists_plain_conversation_without_live_feedback(
+    client, user, seeded_session, monkeypatch,
+):
+    monkeypatch.setattr(
+        "routers.chat.stream_chat_reply",
+        lambda **kwargs: iter(["Sehr ", "gut."]),
+    )
+
+    with client.stream(
+        "POST",
+        "/chat/message/stream",
+        json={"session_id": seeded_session.id, "message": "Heute geht es gut.", "conversation_history": []},
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200
+    assert "event: delta" in body
+    assert "Sehr gut." not in body  # deltas remain independently renderable SSE events
+    db = database.SessionLocal()
+    try:
+        saved = db.query(models.Message).filter(
+            models.Message.session_id == seeded_session.id,
+        ).order_by(models.Message.id.asc()).all()
+        assert saved[-2].role == "user"
+        assert saved[-2].corrected_content is None
+        assert saved[-1].content == "Sehr gut."
+    finally:
+        db.close()
+
+
+def test_stream_reconnect_replays_without_duplicate_messages(client, db_session, user, seeded_session):
+    learner = models.Message(session_id=seeded_session.id, role="user", content="Wie geht es?")
+    db_session.add(learner)
+    db_session.flush()
+    assistant = models.Message(session_id=seeded_session.id, role="assistant", content="Sehr gut.")
+    db_session.add(assistant)
+    db_session.commit()
+
+    with client.stream(
+        "POST",
+        "/chat/message/stream",
+        json={
+            "session_id": seeded_session.id,
+            "resume_user_message_id": learner.id,
+            "message": learner.content,
+            "conversation_history": [],
+        },
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200
+    assert "replayed" in body
+    db_session.expire_all()
+    assert db_session.query(models.Message).filter(models.Message.session_id == seeded_session.id).count() == 3
+
+
+def test_realtime_transcript_sequence_is_idempotent(client, user):
+    session = client.post(
+        "/sessions/",
+        json={"topic": "Reisen", "topic_category": "Travel"},
+    ).json()
+    payload = {"sequence": 0, "role": "user", "content": "Ich reise gern."}
+
+    first = client.post(f"/chat/session/{session['id']}/transcript", json=payload)
+    duplicate = client.post(f"/chat/session/{session['id']}/transcript", json=payload)
+    conflict = client.post(
+        f"/chat/session/{session['id']}/transcript",
+        json={**payload, "content": "Anderer Text"},
+    )
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 200
+    assert duplicate.json()["duplicate"] is True
+    assert duplicate.json()["message_id"] == first.json()["message_id"]
+    assert conflict.status_code == 409
+
+
+def test_hidden_analysis_uses_existing_fields_and_context_marker(
+    db_session, user, seeded_session, monkeypatch,
+):
+    from services.discussion_analysis import analyze_pending_messages, decode_error_context
+
+    monkeypatch.setattr(
+        "services.discussion_analysis.analyze_message_batch",
+        lambda messages, level: [{
+            "message_id": messages[0]["message_id"],
+            "has_errors": True,
+            "corrected_user_message": "Ich suche eine Wohnung.",
+            "corrections": [{
+                "category": "gender",
+                "subcategory": "Akkusativ",
+                "severity": "medium",
+                "original": "ein Wohnung",
+                "corrected": "eine Wohnung",
+                "explanation": "Wohnung is feminine.",
+            }],
+        }],
+    )
+
+    assert analyze_pending_messages(seeded_session.id, user.id, force=True) == 1
+    db_session.expire_all()
+    message = db_session.query(models.Message).filter(models.Message.session_id == seeded_session.id).one()
+    error = db_session.query(models.ErrorRecord).filter(models.ErrorRecord.session_id == seeded_session.id).one()
+    linked_message_id, public_context = decode_error_context(error.context)
+    assert message.corrected_content == "Ich suche eine Wohnung."
+    assert message.has_errors is True
+    assert linked_message_id == message.id
+    assert public_context == message.content
+
+
+def test_ready_review_returns_chronological_detail(client, db_session, user, seeded_session):
+    from datetime import datetime, timezone
+    from services.discussion_analysis import encode_error_context
+
+    message = db_session.query(models.Message).filter(models.Message.session_id == seeded_session.id).one()
+    message.corrected_content = "Ich suche eine Wohnung."
+    message.has_errors = True
+    seeded_session.ended_at = datetime.now(timezone.utc)
+    seeded_session.summary = "Strong vocabulary. Prioritise article gender."
+    seeded_session.score = 82
+    seeded_session.estimated_level = "B2"
+    db_session.add(models.ErrorRecord(
+        user_id=user.id,
+        session_id=seeded_session.id,
+        category="gender",
+        severity="medium",
+        original_text="ein Wohnung",
+        corrected_text="eine Wohnung",
+        explanation="Wohnung is feminine.",
+        context=encode_error_context(message.id, message.content),
+    ))
+    db_session.commit()
+
+    response = client.get(f"/chat/session/{seeded_session.id}/review")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["mistakes"][0]["message_id"] == message.id
+    assert response.json()["mistakes"][0]["corrections"][0]["explanation"] == "Wohnung is feminine."
 
 
 def test_errors_router_returns_user_dashboards(client, db_session, user, seeded_session):

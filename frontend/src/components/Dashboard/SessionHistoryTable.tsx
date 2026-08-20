@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { ConversationSession } from '../../types';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
+import { Link } from 'react-router-dom';
 
 interface Props { sessions: ConversationSession[]; }
 
@@ -75,7 +76,7 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions }) => {
               </tr>
 
               {/* Expanded summary row */}
-              {expanded === s.id && s.summary && (
+              {expanded === s.id && (
                 <tr>
                   <td
                     colSpan={6}
@@ -85,7 +86,16 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions }) => {
                       <div className="text-slate-400 font-semibold mb-1 uppercase tracking-wide text-[10px]">
                         Session summary
                       </div>
-                      {s.summary}
+                      {s.summary ?? 'Detailed feedback is still being prepared.'}
+                      <div className="mt-3">
+                        <Link
+                          to={`/sessions/${s.id}/review`}
+                          className="text-cyan-300 hover:text-cyan-200"
+                          onClick={event => event.stopPropagation()}
+                        >
+                          Open detailed review →
+                        </Link>
+                      </div>
                     </div>
                   </td>
                 </tr>

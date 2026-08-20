@@ -14,7 +14,7 @@ from rate_limits import (
     PRONUNCIATION_FEEDBACK_PER_HOUR,
     require_user_rate_limit,
 )
-from services.audio_service import synthesize_speech, transcribe_audio
+from services.audio_service import stream_speech, transcribe_audio
 
 router = APIRouter(prefix="/audio", tags=["audio"], dependencies=[Depends(get_current_user)])
 
@@ -134,21 +134,20 @@ def speech(
 ):
     require_user_rate_limit(current_user, "audio:speech", AUDIO_SPEECH_PER_HOUR, HOUR)
 
-    try:
-        audio_bytes = synthesize_speech(
+    return StreamingResponse(
+        stream_speech(
             text=request.text,
             voice=request.voice,
             style=request.style,
             model=request.model,
             dialect=request.dialect,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Speech synthesis failed: {exc}") from exc
-
-    return StreamingResponse(
-        BytesIO(audio_bytes),
+        ),
         media_type="audio/mpeg",
-        headers={"Content-Disposition": 'inline; filename="speech.mp3"'},
+        headers={
+            "Content-Disposition": 'inline; filename="speech.mp3"',
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

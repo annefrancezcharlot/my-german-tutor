@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Literal
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
@@ -109,6 +109,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     session_id: Optional[int] = None
+    resume_user_message_id: Optional[int] = Field(default=None, ge=1)
     message: str
     topic: Optional[str] = None
     topic_category: Optional[str] = None
@@ -133,6 +134,58 @@ class ChatResponse(BaseModel):
     corrected_user_message: Optional[str] = None
     has_errors: bool = False
     session_score: Optional[float] = None
+
+
+class RealtimeTranscriptRequest(BaseModel):
+    sequence: int = Field(ge=0)
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=12000)
+
+
+class RealtimeCredentialsRequest(BaseModel):
+    voice: Optional[str] = Field(default=None, min_length=1, max_length=40)
+
+
+class RealtimeTranscriptResponse(BaseModel):
+    message_id: int
+    sequence: int
+    next_sequence: int
+    duplicate: bool = False
+
+
+class RealtimeUsageRequest(BaseModel):
+    input_audio_tokens: int = Field(default=0, ge=0)
+    output_audio_tokens: int = Field(default=0, ge=0)
+    input_text_tokens: int = Field(default=0, ge=0)
+    output_text_tokens: int = Field(default=0, ge=0)
+
+
+class ReviewCorrection(BaseModel):
+    id: int
+    category: str
+    subcategory: Optional[str] = None
+    severity: str
+    original: str
+    corrected: str
+    explanation: str
+
+
+class ReviewMistake(BaseModel):
+    message_id: int
+    original: str
+    corrected: str
+    corrections: List[ReviewCorrection]
+
+
+class SessionReviewResponse(BaseModel):
+    session_id: int
+    status: Literal["active", "preparing", "ready"]
+    topic: str
+    summary: Optional[str] = None
+    score: Optional[float] = None
+    estimated_level: Optional[str] = None
+    mistakes: List[ReviewMistake] = []
+    transcript: List[Dict[str, Any]] = []
 
 
 # ── Style rewrite ─────────────────────────────────────────────────────────

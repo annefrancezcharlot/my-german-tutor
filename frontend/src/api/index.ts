@@ -11,6 +11,7 @@ import type {
   LearningResource, ResourceQuestionsResponse,
   TranslationResponse, TranslationTarget,
   PronunciationFeedbackResponse, TeacherRule, TranscriptionResponse,
+  RealtimeCredentials, SessionReview,
 } from '../types';
 
 // In local development, Vite proxies /api to the FastAPI server. Deployments can
@@ -195,6 +196,101 @@ export const createOpeningMessage = (
 ): Promise<{ session_id: number; reply: string }> =>
   api.post(`/chat/session/${sessionId}/opening`).then(r => r.data);
 
+const authenticatedFetch = async (path: string, init: RequestInit = {}) => {
+  const token = authTokenProvider ? await authTokenProvider() : null;
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+};
+
+export interface ChatStreamHandlers {
+  onSession?: (data: { session_id: number; user_message_id: number }) => void;
+  onDelta: (text: string) => void;
+  onDone?: (data: { assistant_message_id: number }) => void;
+  onError?: (message: string) => void;
+}
+
+export const streamMessage = async (
+  sessionId: number,
+  message: string,
+  signal: AbortSignal,
+  handlers: ChatStreamHandlers,
+  resumeUserMessageId?: number,
+) => {
+  const response = await authenticatedFetch('/chat/message/stream', {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({
+      session_id: sessionId,
+      resume_user_message_id: resumeUserMessageId,
+      message,
+      conversation_history: [],
+    }),
+  });
+  if (!response.ok || !response.body) throw new Error(`Chat stream failed (${response.status})`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let eventName = 'message';
+  let dataLines: string[] = [];
+  let streamError: string | null = null;
+  const dispatch = () => {
+    if (!dataLines.length) return;
+    const data = JSON.parse(dataLines.join('\n'));
+    if (eventName === 'session') handlers.onSession?.(data);
+    if (eventName === 'delta') handlers.onDelta(data.text ?? '');
+    if (eventName === 'done') handlers.onDone?.(data);
+    if (eventName === 'error') {
+      streamError = data.message ?? 'Response interrupted.';
+      handlers.onError?.(streamError);
+    }
+    eventName = 'message';
+    dataLines = [];
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (line.startsWith('event:')) eventName = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+      else if (!line.trim()) dispatch();
+    }
+    if (done) {
+      dispatch();
+      break;
+    }
+  }
+  if (streamError) throw new Error(streamError);
+};
+
+export const getRealtimeCredentials = (
+  sessionId: number,
+  voice: string,
+): Promise<RealtimeCredentials> =>
+  api.post(`/chat/session/${sessionId}/realtime-credentials`, { voice }).then(r => r.data);
+
+export const persistRealtimeTranscript = (
+  sessionId: number,
+  sequence: number,
+  role: 'user' | 'assistant',
+  content: string,
+): Promise<{ message_id: number; next_sequence: number; duplicate: boolean }> =>
+  api.post(`/chat/session/${sessionId}/transcript`, { sequence, role, content }).then(r => r.data);
+
+export const reportRealtimeUsage = (
+  sessionId: number,
+  usage: Record<string, number>,
+): Promise<void> => api.post(`/chat/session/${sessionId}/realtime-usage`, usage).then(() => undefined);
+
+export const getSessionReview = (sessionId: number): Promise<SessionReview> =>
+  api.get(`/chat/session/${sessionId}/review`).then(r => r.data);
+
+export const retrySessionReview = (sessionId: number): Promise<void> =>
+  api.post(`/chat/session/${sessionId}/review/retry`).then(() => undefined);
+
 // ── Audio ────────────────────────────────────────────────────────────────
 export const transcribeAudio = (audio: Blob): Promise<TranscriptionResponse> => {
   const formData = new FormData();
@@ -222,6 +318,18 @@ export const createSpeechAudioUrl = async (
 
   return URL.createObjectURL(response.data);
 };
+
+export const createSpeechStream = (
+  text: string,
+  voice = 'cedar',
+  style = 'clear standard German',
+  model = 'gpt-4o-mini-tts',
+  dialect?: string,
+): Promise<Response> => authenticatedFetch('/audio/speech', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ text, voice, style, model, dialect }),
+});
 
 export const getPronunciationFeedback = (
   expectedText: string,

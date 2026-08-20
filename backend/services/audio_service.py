@@ -35,3 +35,27 @@ def synthesize_speech(
         response_format="mp3",
     )
     return response.content
+
+
+def stream_speech(
+    text: str,
+    voice: str = "cedar",
+    style: str = "clear standard German",
+    model: str = "gpt-4o-mini-tts",
+    dialect: str | None = None,
+):
+    """Yield encoded audio as OpenAI produces it so playback can begin promptly."""
+    if model == "gradio_swiss_tts":
+        yield synthesize_swiss_german_speech(text, dialect=dialect)
+        return
+
+    with client.audio.speech.with_streaming_response.create(
+        model=model,
+        voice=voice,
+        input=text,
+        instructions=f"Speak in {style}. Use clear German pronunciation.",
+        response_format="mp3",
+    ) as response:
+        for chunk in response.iter_bytes(chunk_size=4096):
+            if chunk:
+                yield chunk
