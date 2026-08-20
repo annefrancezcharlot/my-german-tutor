@@ -242,8 +242,11 @@ export const streamMessage = async (
     if (eventName === 'delta') handlers.onDelta(data.text ?? '');
     if (eventName === 'done') handlers.onDone?.(data);
     if (eventName === 'error') {
-      streamError = data.message ?? 'Response interrupted.';
-      handlers.onError?.(streamError);
+      const errorMessage = typeof data.message === 'string'
+        ? data.message
+        : 'Response interrupted.';
+      streamError = errorMessage;
+      handlers.onError?.(errorMessage);
     }
     eventName = 'message';
     dataLines = [];
