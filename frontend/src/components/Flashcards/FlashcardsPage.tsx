@@ -681,9 +681,9 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-1">Flashcards</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Flashcards</h1>
         <p className="text-slate-400 text-sm">
           Learn vocabulary by topic, with examples for cases and tenses.
         </p>
@@ -709,7 +709,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
       {!selectedSet ? (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
+          <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 sm:rounded-2xl sm:p-5">
             <div className="mb-4 flex items-start gap-3">
               <div className="rounded-xl bg-blue-600/20 p-2 text-blue-200">
                 <Sparkles size={18} />
@@ -841,7 +841,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 type="button"
                 onClick={() => openSet(set.id)}
                 disabled={loadingSet}
-                className="rounded-2xl border border-slate-700 bg-slate-800 p-5 text-left transition-colors hover:border-blue-500/60 hover:bg-slate-700 disabled:opacity-60"
+                className="rounded-xl border border-slate-700 bg-slate-800 p-4 text-left transition-colors hover:border-blue-500/60 hover:bg-slate-700 disabled:opacity-60 sm:rounded-2xl sm:p-5"
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
@@ -861,7 +861,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
           </div>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3 sm:space-y-5">
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
@@ -871,20 +871,20 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               <ArrowLeft size={16} />
               Sets
             </button>
-            <div className="text-right">
-              <div className="text-sm font-semibold text-white">{selectedSet.title}</div>
+            <div className="min-w-0 text-right">
+              <div className="truncate text-sm font-semibold text-white">{selectedSet.title}</div>
               <div className="text-xs text-slate-400">
                 {studyModeLabels[studyMode]} · {activeQueueCount} left · {progressLabel} done
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-700 bg-slate-800 p-4">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="order-1 rounded-xl border border-slate-700 bg-slate-800 p-3 sm:order-none sm:rounded-2xl sm:p-4">
+            <div className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1">
               <button
                 type="button"
                 onClick={() => setManagementMode(current => current === 'extend' ? null : 'extend')}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
               >
                 <Plus size={15} /> Add words
               </button>
@@ -896,7 +896,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                       setEditingCard(null);
                       setManagementMode(current => current === 'cards' ? null : 'cards');
                     }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
                   >
                     <Pencil size={15} /> Edit cards
                   </button>
@@ -905,7 +905,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               <button
                 type="button"
                 onClick={() => setManagementMode(current => current === 'merge' ? null : 'merge')}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
               >
                 <GitMerge size={15} /> Merge with another set
               </button>
@@ -914,7 +914,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   type="button"
                   onClick={() => void handleDeleteSet()}
                   disabled={managingSet}
-                  className="ml-auto inline-flex items-center gap-2 rounded-xl border border-red-700/70 px-3 py-2 text-sm text-red-300 hover:bg-red-900/30 disabled:opacity-50"
+                  className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-700/70 px-3 py-2 text-sm text-red-300 hover:bg-red-900/30 disabled:opacity-50"
                 >
                   <Trash2 size={15} /> Delete set
                 </button>
@@ -1062,8 +1062,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3">
-            <div className="text-sm text-slate-300">
+          <div className="order-3 flex items-center justify-end gap-3 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 sm:order-none sm:justify-between sm:rounded-2xl sm:px-4 sm:py-3">
+            <div className="hidden text-sm text-slate-300 sm:block">
               Practice the cards first, or start a conversation with this vocabulary.
             </div>
             <button
@@ -1076,7 +1076,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
             </button>
           </div>
 
-          <div className="grid gap-2 rounded-2xl border border-slate-700 bg-slate-800 p-2 sm:grid-cols-3">
+          <div className="order-4 grid grid-cols-3 gap-1 rounded-xl border border-slate-700 bg-slate-800 p-1.5 sm:order-none sm:gap-2 sm:rounded-2xl sm:p-2">
             {(Object.keys(studyModeLabels) as FlashcardStudyMode[]).map(mode => (
               <button
                 key={mode}
@@ -1090,7 +1090,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   setDetailTab('example');
                 }}
                 className={clsx(
-                  'rounded-xl px-3 py-2 text-sm font-semibold transition-colors',
+                  'rounded-lg px-1.5 py-2 text-[11px] font-semibold transition-colors sm:rounded-xl sm:px-3 sm:text-sm',
                   studyMode === mode
                     ? 'bg-blue-600 text-white'
                     : 'text-slate-300 hover:bg-slate-700 hover:text-white',
@@ -1101,8 +1101,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3">
-            <div className="text-sm text-slate-300">
+          <div className="order-5 flex items-center justify-between gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 sm:order-none sm:rounded-2xl sm:px-4 sm:py-3">
+            <div className="truncate text-xs text-slate-300 sm:text-sm">
               {savingProgress
                 ? 'Saving session...'
                 : lastSavedCount > 0 && unsavedCount === 0
@@ -1133,8 +1133,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
           </div>
 
           {currentCard ? (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
+          <div className="order-2 grid gap-3 sm:order-none sm:gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3 sm:rounded-2xl sm:p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
                   {currentCard.tags?.map(tag => (
@@ -1150,7 +1150,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-slate-300">Start side</div>
-                <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
+                <div className="grid w-full grid-cols-2 gap-1.5 sm:w-auto sm:gap-2">
                   {(Object.keys(cardStartSideLabels) as CardStartSide[]).map(side => (
                     <button
                       key={side}
@@ -1175,12 +1175,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               <button
                 type="button"
                 onClick={() => setShowBack(prev => !prev)}
-                className="flex min-h-72 w-full flex-col items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 px-6 py-10 text-center transition-colors hover:border-blue-500/50"
+                className="flex min-h-48 w-full flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-6 text-center transition-colors hover:border-blue-500/50 sm:min-h-72 sm:rounded-2xl sm:px-6 sm:py-10"
               >
                 <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {showBack ? 'Back' : 'Front'}
                 </div>
-                <div className="text-4xl font-bold text-white">{showBack ? currentCard.back : currentCard.front}</div>
+                <div className="text-3xl font-bold text-white sm:text-4xl">{showBack ? currentCard.back : currentCard.front}</div>
                 <div className="mt-5 text-sm text-slate-500">Click to flip</div>
               </button>
 
@@ -1203,12 +1203,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4 grid grid-cols-2 gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => speakText(visibleCardText, visibleCardAudioStyle)}
                   disabled={speakingText !== null}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-white disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-600 px-2 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-white disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-sm"
                 >
                   {speakingText === visibleCardText
                     ? <Loader2 size={16} className="animate-spin" />
@@ -1220,7 +1220,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   onClick={togglePronunciationRecording}
                   disabled={pronunciationLoading}
                   className={clsx(
-                    'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50',
+                    'inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-colors disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-sm',
                     pronunciationRecording
                       ? 'bg-red-600 text-white hover:bg-red-500'
                       : 'bg-cyan-600 text-white hover:bg-cyan-500',
@@ -1268,26 +1268,26 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 </div>
               )}
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-4">
+              <div className="mt-4 grid grid-cols-4 gap-1 sm:gap-2">
                 {reviewOptions.map(option => (
                   <button
                     key={option.rating}
                     type="button"
                     onClick={() => handleReview(option.rating)}
                     className={clsx(
-                      'min-h-16 rounded-xl border bg-slate-900 px-3 py-2 text-center transition-colors',
+                      'min-h-14 rounded-lg border bg-slate-900 px-1 py-2 text-center transition-colors sm:min-h-16 sm:rounded-xl sm:px-3',
                       sessionTags[currentCard.id] === option.rating && 'ring-2 ring-white/60',
                       option.className,
                     )}
                   >
-                    <div className="text-sm font-semibold">{option.label}</div>
-                    <div className="mt-1 text-[11px] leading-tight text-slate-400">{option.hint}</div>
+                    <div className="text-xs font-semibold sm:text-sm">{option.label}</div>
+                    <div className="mt-1 hidden text-[11px] leading-tight text-slate-400 sm:block">{option.hint}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3 sm:rounded-2xl sm:p-5">
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
                 <Layers size={16} />
                 Usage
@@ -1329,7 +1329,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
             </div>
           </div>
           ) : (
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
+            <div className="order-2 rounded-xl border border-slate-700 bg-slate-800 p-5 sm:order-none">
               <div className="text-sm font-semibold text-white">
                 {selectedSet.cards.length === 0
                   ? 'This set contains no cards.'

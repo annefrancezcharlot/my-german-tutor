@@ -61,7 +61,7 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
 
       {/* Banner after session end */}
       {sessionSummary && (
@@ -69,7 +69,7 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
       )}
 
       <div>
-        <h1 className="text-3xl font-bold text-white mb-1">Your progress</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Your progress</h1>
         <p className="text-slate-400 text-sm">
           Learning progress · {user.username} · {user.level}
         </p>

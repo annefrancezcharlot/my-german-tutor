@@ -10,7 +10,11 @@ const targetOptions: Array<{ value: TranslationTarget; label: string }> = [
   { value: 'French', label: 'French' },
 ];
 
-export const GlobalTranslator: React.FC = () => {
+interface Props {
+  fullWidth?: boolean;
+}
+
+export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [targetLanguage, setTargetLanguage] = useState<TranslationTarget>('auto');
@@ -63,15 +67,15 @@ export const GlobalTranslator: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen(prev => !prev)}
-        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+        className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white ${fullWidth ? 'w-full justify-start' : ''}`}
         title="Translate"
       >
         <Languages size={18} />
-        <span className="hidden lg:inline">Translate</span>
+        <span className={fullWidth ? '' : 'hidden lg:inline'}>Translate</span>
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-2xl">
+        <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(22rem,calc(100vw-2rem))]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-white">Quick translate</h2>

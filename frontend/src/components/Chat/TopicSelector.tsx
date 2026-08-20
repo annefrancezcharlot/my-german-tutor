@@ -141,10 +141,10 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
 
   return (
     <div>
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="mb-5 flex flex-col gap-3 sm:mb-8 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Choose a topic</h1>
-          <p className="text-slate-400">Choose a topic, start from a specific prompt, or get a random one.</p>
+          <h1 className="mb-1 text-2xl font-bold text-white sm:mb-2 sm:text-3xl">Choose a topic</h1>
+          <p className="text-sm text-slate-400 sm:text-base">Choose a topic, start from a specific prompt, or get a random one.</p>
         </div>
         <button
           onClick={handleRandomTopic}
@@ -159,7 +159,7 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
         </button>
       </div>
 
-      <div className="mb-8 rounded-2xl border border-slate-700 bg-slate-800 p-5">
+      <div className="mb-5 rounded-xl border border-slate-700 bg-slate-800 p-4 sm:mb-8 sm:rounded-2xl sm:p-5">
         <div className="mb-3">
           <h2 className="text-lg font-semibold text-white">Your own topic</h2>
           <p className="mt-1 text-sm text-slate-400">
@@ -192,13 +192,13 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
       </div>
 
       {/* Category filter */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="-mx-3 mb-4 flex flex-nowrap gap-2 overflow-x-auto px-3 pb-2 sm:mx-0 sm:mb-6 sm:flex-wrap sm:px-0 sm:pb-0">
         {categories.map(cat => (
           <button
             key={cat}
             onClick={() => setActiveCategory(cat)}
             className={clsx(
-              'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+              'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
               activeCategory === cat
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'

@@ -76,8 +76,8 @@ export const ProfilePage: React.FC<Props> = ({ user, onUserUpdate, onAccountDele
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">My profile</h1>
+      <div className="mb-5 sm:mb-8">
+        <h1 className="text-2xl font-bold text-white sm:text-3xl">My profile</h1>
         <p className="mt-2 text-slate-400">Manage your learning settings and account.</p>
       </div>
 

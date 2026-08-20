@@ -304,11 +304,11 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
       : realtimeState === 'thinking' ? 'Thinking…' : 'Listening';
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800" style={{ height: 'calc(100vh - 8rem)' }}>
-      <header className="flex items-center justify-between border-b border-slate-700 bg-slate-900 px-5 py-3">
-        <div>
-          <div className="font-semibold text-white">{topic?.title ?? 'Conversation'}</div>
-          <div className="text-xs text-slate-400">{user.level} · Feedback stays hidden until the review</div>
+    <div className="mx-auto flex h-[calc(100dvh-5.5rem)] max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 md:h-[calc(100dvh-10.5rem)] md:rounded-2xl">
+      <header className="flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-900 px-3 py-2 sm:px-5 sm:py-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-white sm:text-base">{topic?.title ?? 'Conversation'}</div>
+          <div className="hidden text-xs text-slate-400 sm:block">{user.level} · Feedback stays hidden until the review</div>
         </div>
         <div className="flex items-center gap-3">
           {mode === 'controlled' && (
@@ -323,16 +323,16 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
               </select>
             </label>
           )}
-          <button onClick={() => setShowClose(true)} className="rounded-lg bg-red-700 px-4 py-2 text-sm hover:bg-red-600">Close</button>
+          <button onClick={() => setShowClose(true)} className="rounded-lg bg-red-700 px-3 py-1.5 text-sm hover:bg-red-600 sm:px-4 sm:py-2">Close</button>
         </div>
       </header>
 
       {!mode ? (
-        <div className="flex flex-1 items-center justify-center p-6">
+        <div className="flex flex-1 items-center justify-center overflow-y-auto p-3 sm:p-6">
           <div className="w-full max-w-2xl">
-            <h1 className="text-center text-2xl font-semibold">How would you like to talk?</h1>
+            <h1 className="text-center text-xl font-semibold sm:text-2xl">How would you like to talk?</h1>
             <p className="mt-2 text-center text-sm text-slate-400">Both modes receive the same detailed review after the session.</p>
-            <div className="mx-auto mt-6 max-w-xs">
+            <div className="mx-auto mt-4 max-w-xs sm:mt-6">
               <label className="block text-sm font-medium text-slate-200" htmlFor="discussion-voice">Tutor voice</label>
               <select
                 id="discussion-voice"
@@ -345,14 +345,14 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
               </select>
               <p className="mt-1.5 text-xs text-slate-500">Used for live voice and optional text-to-speech. Voices are AI-generated.</p>
             </div>
-            <div className="mt-8 grid gap-4 md:grid-cols-2">
-              <button onClick={startRealtime} disabled={!activeSessionId || busy} className="rounded-2xl border border-cyan-600/60 bg-cyan-950/40 p-6 text-left hover:bg-cyan-950/70 disabled:opacity-40">
-                <Headphones className="mb-4 text-cyan-300" />
+            <div className="mt-4 grid gap-2 sm:mt-8 sm:gap-4 md:grid-cols-2">
+              <button onClick={startRealtime} disabled={!activeSessionId || busy} className="rounded-xl border border-cyan-600/60 bg-cyan-950/40 p-4 text-left hover:bg-cyan-950/70 disabled:opacity-40 sm:rounded-2xl sm:p-6">
+                <Headphones className="mb-2 text-cyan-300 sm:mb-4" />
                 <div className="font-semibold">Fluid voice</div>
                 <div className="mt-2 text-sm text-slate-300">Natural hands-free speech, automatic turns and interruptions. Voice only, up to seven minutes.</div>
               </button>
-              <button onClick={startControlled} disabled={!activeSessionId || busy} className="rounded-2xl border border-blue-600/60 bg-blue-950/40 p-6 text-left hover:bg-blue-950/70 disabled:opacity-40">
-                <Keyboard className="mb-4 text-blue-300" />
+              <button onClick={startControlled} disabled={!activeSessionId || busy} className="rounded-xl border border-blue-600/60 bg-blue-950/40 p-4 text-left hover:bg-blue-950/70 disabled:opacity-40 sm:rounded-2xl sm:p-6">
+                <Keyboard className="mb-2 text-blue-300 sm:mb-4" />
                 <div className="font-semibold">Controlled</div>
                 <div className="mt-2 text-sm text-slate-300">Type or push to talk. Fast streamed text replies; audio playback only when requested.</div>
               </button>
@@ -361,45 +361,45 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
           </div>
         </div>
       ) : mode === 'realtime' ? (
-        <div className="flex flex-1 flex-col items-center justify-center p-6">
-          <div className={clsx('flex h-36 w-36 items-center justify-center rounded-full border-4 transition-all', realtimeState === 'speaking' ? 'animate-pulse border-cyan-400 bg-cyan-500/20' : 'border-blue-400 bg-blue-500/10')}>
+        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto p-3 sm:p-6">
+          <div className={clsx('flex h-28 w-28 items-center justify-center rounded-full border-4 transition-all sm:h-36 sm:w-36', realtimeState === 'speaking' ? 'animate-pulse border-cyan-400 bg-cyan-500/20' : 'border-blue-400 bg-blue-500/10')}>
             {realtimeState === 'connecting' ? <Loader2 className="animate-spin" size={44} /> : <Mic size={44} />}
           </div>
           <div className="mt-5 text-lg font-medium">{statusLabel}</div>
           {remainingSeconds !== null && <div className="mt-1 text-sm text-slate-400">{Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')} remaining</div>}
           {error && <div className="mt-4 rounded-lg bg-red-950/60 px-4 py-2 text-sm text-red-200">{error}</div>}
-          <button onClick={() => setShowTranscript(value => !value)} className="mt-6 text-sm text-cyan-300 hover:text-cyan-200">{showTranscript ? 'Hide transcript' : 'Show transcript'}</button>
+          <button onClick={() => setShowTranscript(value => !value)} className="mt-4 text-sm text-cyan-300 hover:text-cyan-200 sm:mt-6">{showTranscript ? 'Hide transcript' : 'Show transcript'}</button>
           {showTranscript && (
             <div className="mt-3 max-h-52 w-full max-w-xl overflow-y-auto rounded-xl bg-slate-900 p-4">
               {messages.map((message, index) => <p key={message.id ?? index} className="mb-2 text-sm"><span className="font-semibold text-slate-400">{message.role === 'user' ? 'You' : 'Tutor'}:</span> {message.content}</p>)}
               {assistantDraft && <p className="text-sm text-slate-300"><span className="font-semibold text-slate-400">Tutor:</span> {assistantDraft}</p>}
             </div>
           )}
-          <button onClick={() => setShowClose(true)} className="mt-8 flex items-center gap-2 rounded-xl bg-red-700 px-5 py-3 hover:bg-red-600"><PhoneOff size={18} /> End voice session</button>
+          <button onClick={() => setShowClose(true)} className="mt-5 flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 hover:bg-red-600 sm:mt-8 sm:px-5 sm:py-3"><PhoneOff size={18} /> End voice session</button>
         </div>
       ) : (
         <>
-          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:space-y-4 sm:px-5 sm:py-4">
             {messages.map((message, index) => (
               <MessageBubble key={message.id ?? index} message={message} showFeedback={false} onSpeak={message.role === 'assistant' && !busy ? text => void playSpeech(text, { voice: selectedVoice }).catch(() => setError('Audio could not be played.')) : undefined} />
             ))}
             {busy && <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={15} className="animate-spin" /> Claude is writing…</div>}
             <div ref={bottomRef} />
           </div>
-          <div className="border-t border-slate-700 bg-slate-900 p-4">
-            <div className="flex items-end gap-3">
-              <textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(input); } }} disabled={busy || transcribing} rows={2} placeholder="Write in German…" className="flex-1 resize-none rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+          <div className="border-t border-slate-700 bg-slate-900 p-2 sm:p-4">
+            <div className="flex items-end gap-2 sm:gap-3">
+              <textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(input); } }} disabled={busy || transcribing} rows={1} placeholder="Write in German…" className="min-h-11 flex-1 resize-none rounded-xl border border-slate-600 bg-slate-700 px-3 py-3 text-sm outline-none focus:border-blue-500 sm:px-4" />
               <button onClick={toggleRecording} disabled={busy || transcribing} className={clsx('rounded-xl p-3', recording ? 'bg-red-600' : 'bg-slate-700', (busy || transcribing) && 'opacity-40')} title="Push to talk">{transcribing ? <Loader2 size={18} className="animate-spin" /> : recording ? <MicOff size={18} /> : <Mic size={18} />}</button>
               <button onClick={() => void sendText(input)} disabled={!input.trim() || busy || transcribing} className="rounded-xl bg-blue-600 p-3 disabled:opacity-40"><Send size={18} /></button>
             </div>
-            <div className={clsx('mt-2 text-xs', error ? 'text-red-300' : 'text-slate-500')}>{error ?? (recording ? 'Recording… press again to send.' : 'Type or push to talk. Use the speaker button only when you want audio.')}</div>
+            <div className={clsx('mt-1 truncate text-[11px] sm:mt-2 sm:text-xs', error ? 'text-red-300' : 'text-slate-500')}>{error ?? (recording ? 'Recording… press again to send.' : 'Type or push to talk. Use the speaker button only when you want audio.')}</div>
           </div>
         </>
       )}
 
       {showClose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 sm:p-6">
             <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">End this conversation?</h2><p className="mt-1 text-sm text-slate-400">Saving opens the review immediately while analysis finishes in the background.</p></div><button onClick={() => setShowClose(false)}><X size={18} /></button></div>
             {topic?.isFreeTopic && userTurnsRef.current > 0 && (
               <div className="mt-5 rounded-xl border border-slate-700 bg-slate-800 p-4">

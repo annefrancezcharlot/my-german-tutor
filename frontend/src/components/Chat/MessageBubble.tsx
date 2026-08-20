@@ -21,7 +21,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback 
 
   return (
     <div className={clsx('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div className={clsx('max-w-[80%] space-y-2')}>
+      <div className={clsx('max-w-[92%] space-y-2 sm:max-w-[80%]')}>
         {/* Avatar label */}
         <div className={clsx(
           'text-xs text-slate-400 mb-1',
@@ -32,7 +32,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback 
 
         {/* Main bubble */}
         <div className={clsx(
-          'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+          'rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:px-4 sm:py-3',
           isUser
             ? 'bg-blue-600 text-white rounded-tr-sm'
             : 'bg-slate-700 text-slate-100 rounded-tl-sm'

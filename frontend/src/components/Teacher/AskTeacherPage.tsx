@@ -118,15 +118,15 @@ export const AskTeacherPage: React.FC<Props> = ({ user }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="mb-1 text-3xl font-bold text-white">Ask the teacher</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Ask the teacher</h1>
         <p className="text-sm text-slate-400">
           Ask a question about grammar, wording, style, or precision and save the answer as a rule.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
+      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-700 bg-slate-800 p-4 sm:rounded-2xl sm:p-5">
         <label htmlFor="teacher-question" className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
           <GraduationCap size={18} className="text-cyan-300" />
           Question for the teacher

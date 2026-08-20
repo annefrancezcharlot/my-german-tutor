@@ -74,7 +74,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-1">Resources</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Resources</h1>
         <p className="text-slate-400 text-sm">
           Videos, texts, and audio sources for learning, with optional Claude questions.
         </p>

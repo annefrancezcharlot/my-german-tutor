@@ -161,9 +161,9 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-1">Style</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Style</h1>
         <p className="text-slate-400 text-sm">
           Rewrite your sentences from a completed session.
         </p>

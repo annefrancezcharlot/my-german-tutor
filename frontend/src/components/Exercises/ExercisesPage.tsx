@@ -105,16 +105,16 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
   ]));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-1">Exercises</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Exercises</h1>
         <p className="text-slate-400 text-sm">
           Targeted practice based on your most frequent mistakes.
         </p>
       </div>
 
       {/* ── Generate panel ──────────────────────────────────────────── */}
-      <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
+      <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 sm:rounded-2xl sm:p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="font-semibold text-white mb-1 flex items-center gap-2">

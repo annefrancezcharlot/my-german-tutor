@@ -149,7 +149,7 @@ export default function App() {
       {user ? (
         <div className="min-h-screen bg-slate-900 text-white">
           <Navbar user={user} onLogout={handleLogout} />
-          <main className="max-w-6xl mx-auto px-4 py-8">
+          <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-8">
             <Routes>
               <Route path="/" element={<Navigate to="/topics" replace />} />
               <Route path="/topics" element={<TopicSelector user={user} />} />
