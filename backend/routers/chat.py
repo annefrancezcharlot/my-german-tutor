@@ -488,12 +488,13 @@ def _build_review(session, messages, errors) -> schemas.SessionReviewResponse:
     mistakes = []
     for message in messages:
         linked = errors_by_message.get(message.id, [])
-        if message.role != "user" or not (message.has_errors or linked):
+        if message.role != "user" or not (message.has_errors or linked or message.style_suggestions):
             continue
         mistakes.append(schemas.ReviewMistake(
             message_id=message.id,
             original=message.content,
             corrected=message.corrected_content or message.content,
+            suggestions=message.style_suggestions or [],
             corrections=[schemas.ReviewCorrection(
                 id=error.id,
                 category=error.category,

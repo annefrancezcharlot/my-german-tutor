@@ -106,6 +106,7 @@ export interface ReviewMistake {
   original: string;
   corrected: string;
   corrections: ReviewCorrection[];
+  suggestions?: { original: string; corrected: string; explanation: string }[];
 }
 
 export interface SessionReview {

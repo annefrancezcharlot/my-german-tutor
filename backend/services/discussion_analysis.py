@@ -77,6 +77,7 @@ def analyze_pending_messages(session_id: int, user_id: UUID, force: bool = False
                     result = results_by_id[message.id]
                     message.corrected_content = result["corrected_user_message"] or message.content
                     message.has_errors = bool(result["has_errors"])
+                    message.style_suggestions = result.get("suggestions", [])
                     for correction in result["corrections"]:
                         db.add(models.ErrorRecord(
                             user_id=user_id,

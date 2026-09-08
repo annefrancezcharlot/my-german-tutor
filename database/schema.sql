@@ -3308,6 +3308,7 @@ CREATE TABLE public.flashcard_sets (
 --
 
 CREATE TABLE public.messages (
+    style_suggestions json,
     id bigint NOT NULL,
     session_id bigint NOT NULL,
     role text NOT NULL,

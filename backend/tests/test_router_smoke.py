@@ -764,3 +764,33 @@ def test_resources_translate_and_audio_routers_with_mocked_providers(client, use
     )
     assert pronunciation.status_code == 200
     assert pronunciation.json()["transcribed_text"] == "Hallo"
+
+
+def test_optional_suggestions_saved_without_errors(client, db_session, user, seeded_session, monkeypatch):
+    from services.discussion_analysis import analyze_pending_messages, finalize_session_review
+    message = db_session.query(models.Message).filter(models.Message.session_id == seeded_session.id).one()
+    message.content = "Was war genau laut?"
+    db_session.commit()
+    suggestion = {"original": message.content, "corrected": "Was war genau so laut?",
+                  "explanation": "Optional emphasis; Was is already the subject."}
+    monkeypatch.setattr("services.discussion_analysis.analyze_message_batch", lambda messages, level: [{
+        "message_id": message.id, "has_errors": False, "corrected_user_message": message.content,
+        "corrections": [], "suggestions": [suggestion],
+    }])
+    assert analyze_pending_messages(seeded_session.id, user.id, force=True) == 1
+    def summary(**kwargs):
+        assert kwargs["errors"] == []
+        return {"summary": "Correct question.", "estimated_level": "B2"}
+    monkeypatch.setattr("services.discussion_analysis.generate_session_summary", summary)
+    finalize_session_review(seeded_session.id, user.id)
+    db_session.expire_all()
+    assert message.has_errors is False
+    assert seeded_session.error_count == 0
+    assert seeded_session.score == 100
+    assert db_session.query(models.ErrorRecord).count() == 0
+    response = client.get(f"/chat/session/{seeded_session.id}/review")
+    assert response.status_code == 200
+    detail = response.json()["mistakes"][0]
+    assert detail["corrected"] == message.content
+    assert detail["corrections"] == []
+    assert detail["suggestions"] == [suggestion]

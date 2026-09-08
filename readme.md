@@ -98,3 +98,10 @@ Modifications:
 - Filtered entries
 
 The file `backend/content/nouns_cleaned.csv` remains licensed under CC BY-SA 4.0.
+
+### Correction review migration
+
+Before starting the updated backend against an existing database, apply
+`database/migrations/20260908_message_style_suggestions.sql`. New analyses store
+optional suggestions separately from scored errors and construct corrected text
+from validated edits. Previously saved reviews are unchanged.

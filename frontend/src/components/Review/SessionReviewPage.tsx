@@ -72,13 +72,13 @@ export const SessionReviewPage: React.FC = () => {
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div><div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">Score</div><div className="mt-1 text-2xl font-bold text-cyan-300 sm:text-3xl">{review.score == null ? '—' : Math.round(review.score)}</div></div>
               <div><div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">Estimated level</div><div className="mt-1 text-2xl font-bold text-violet-300 sm:text-3xl">{review.estimated_level ?? '—'}</div></div>
-              <div><div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">Mistakes</div><div className="mt-1 text-2xl font-bold text-amber-300 sm:text-3xl">{review.mistakes.length}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">Mistakes</div><div className="mt-1 text-2xl font-bold text-amber-300 sm:text-3xl">{review.mistakes.filter(mistake => mistake.corrections.length > 0).length}</div></div>
             </div>
             <div className="mt-6 border-t border-slate-700 pt-5"><h2 className="font-semibold">Summary, strengths and priorities</h2><p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-300">{review.summary}</p></div>
           </section>
 
           <section>
-            <h2 className="mb-3 text-lg font-semibold">Detailed corrections</h2>
+            <h2 className="mb-3 text-lg font-semibold">Corrections and suggestions</h2>
             {review.mistakes.length === 0 ? (
               <div className="rounded-2xl border border-green-700/40 bg-green-950/30 p-6 text-green-200">No qualifying mistakes were found in this conversation.</div>
             ) : (
@@ -94,6 +94,13 @@ export const SessionReviewPage: React.FC = () => {
                           <div className="flex flex-wrap items-center gap-2"><span className="rounded bg-slate-700 px-2 py-1 text-xs">{correction.category.replace('_', ' ')}</span>{correction.subcategory && <span className="text-xs text-slate-400">{correction.subcategory}</span>}<span className={clsx('ml-auto rounded px-2 py-1 text-xs', correction.severity === 'severe' ? 'bg-red-900 text-red-200' : correction.severity === 'medium' ? 'bg-amber-900 text-amber-200' : 'bg-blue-900 text-blue-200')}>{correction.severity}</span></div>
                           <div className="mt-3 text-slate-300"><span className="text-red-300 line-through">{correction.original}</span><span className="mx-2">→</span><span className="text-green-300">{correction.corrected}</span></div>
                           <p className="mt-2 leading-6 text-slate-400">{correction.explanation}</p>
+                        </div>
+                      ))}
+                      {mistake.suggestions?.map((suggestion, suggestionIndex) => (
+                        <div key={`suggestion-${suggestionIndex}`} className="rounded-xl border border-slate-700 p-4 text-sm">
+                          <div className="text-blue-300">Style suggestion · Optional · Does not affect your score</div>
+                          <div className="mt-3 text-slate-300"><span>{suggestion.original}</span><span className="mx-2">→</span><span className="text-blue-200">{suggestion.corrected}</span></div>
+                          <p className="mt-2 leading-6 text-slate-400">{suggestion.explanation}</p>
                         </div>
                       ))}
                     </div>

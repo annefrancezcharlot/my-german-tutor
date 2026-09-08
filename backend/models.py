@@ -91,6 +91,7 @@ class Message(Base):
     role = Column(String, nullable=False)          # "user" | "assistant"
     content = Column(Text, nullable=False)
     corrected_content = Column(Text, nullable=True)
+    style_suggestions = Column(JSON, nullable=True)
     has_errors = Column(Boolean, default=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 

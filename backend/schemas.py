@@ -170,11 +170,18 @@ class ReviewCorrection(BaseModel):
     explanation: str
 
 
+class ReviewSuggestion(BaseModel):
+    original: str
+    corrected: str
+    explanation: str
+
+
 class ReviewMistake(BaseModel):
     message_id: int
     original: str
     corrected: str
     corrections: List[ReviewCorrection]
+    suggestions: List[ReviewSuggestion] = Field(default_factory=list)
 
 
 class SessionReviewResponse(BaseModel):
