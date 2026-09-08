@@ -111,3 +111,19 @@ def test_conflicting_corrections_retry_as_one_edit(monkeypatch):
     result = service.analyze_message_batch([{'message_id': 1, 'content': 'Ich habe ein Hund.'}])
     assert result[0]['corrected_user_message'] == 'Ich habe einen Hund.'
     assert 'exactly ONE correction' in calls[1]['messages'][0]['content']
+
+
+def test_summary_retries_missing_level(monkeypatch):
+    responses = [{'summary': 'Good work'}, {'summary': 'Good work', 'estimated_level': 'B2'}]
+    def create(**kwargs):
+        return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(responses.pop(0)))])
+    monkeypatch.setattr(service.client.messages, 'create', create)
+    assert service.generate_session_summary([], [], 'Test', 'B2')['estimated_level'] == 'B2'
+    assert responses == []
+
+
+def test_summary_rejects_incomplete_assessment(monkeypatch):
+    monkeypatch.setattr(service.client.messages, 'create', lambda **kwargs:
+        SimpleNamespace(content=[SimpleNamespace(text='{"summary":"Good work"}')]))
+    with pytest.raises(ValueError, match='after retry'):
+        service.generate_session_summary([], [], 'Test', 'B2')

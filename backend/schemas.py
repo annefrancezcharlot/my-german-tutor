@@ -93,9 +93,6 @@ class SessionResponse(BaseModel):
     started_at: datetime
     ended_at: Optional[datetime]
     score: Optional[float]
-    fluency_score: Optional[float]
-    accuracy_score: Optional[float]
-    vocabulary_score: Optional[float]
     estimated_level: Optional[str]
     message_count: int
     error_count: int
@@ -186,7 +183,7 @@ class ReviewMistake(BaseModel):
 
 class SessionReviewResponse(BaseModel):
     session_id: int
-    status: Literal["active", "preparing", "ready"]
+    status: Literal["active", "preparing", "ready", "failed"]
     topic: str
     summary: Optional[str] = None
     score: Optional[float] = None

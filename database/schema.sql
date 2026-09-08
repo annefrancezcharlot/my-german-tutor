@@ -3392,6 +3392,7 @@ CREATE TABLE public.profiles (
 --
 
 CREATE TABLE public.sessions (
+    review_error text,
     id bigint NOT NULL,
     user_id uuid NOT NULL,
     topic text NOT NULL,
@@ -3399,9 +3400,6 @@ CREATE TABLE public.sessions (
     started_at timestamp with time zone DEFAULT now() NOT NULL,
     ended_at timestamp with time zone,
     score double precision,
-    fluency_score double precision,
-    accuracy_score double precision,
-    vocabulary_score double precision,
     estimated_level text,
     message_count integer DEFAULT 0 NOT NULL,
     error_count integer DEFAULT 0 NOT NULL,

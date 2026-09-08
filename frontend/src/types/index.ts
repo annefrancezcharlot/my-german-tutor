@@ -46,9 +46,6 @@ export interface ConversationSession {
   started_at: string;
   ended_at?: string;
   score?: number;
-  fluency_score?: number;
-  accuracy_score?: number;
-  vocabulary_score?: number;
   estimated_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
   message_count: number;
   error_count: number;
@@ -111,7 +108,7 @@ export interface ReviewMistake {
 
 export interface SessionReview {
   session_id: number;
-  status: 'active' | 'preparing' | 'ready';
+  status: 'active' | 'preparing' | 'ready' | 'failed';
   topic: string;
   summary?: string;
   score?: number;

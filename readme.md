@@ -105,3 +105,8 @@ Before starting the updated backend against an existing database, apply
 `database/migrations/20260908_message_style_suggestions.sql`. New analyses store
 optional suggestions separately from scored errors and construct corrected text
 from validated edits. Previously saved reviews are unchanged.
+
+Apply `database/migrations/20260908_consolidate_session_score.sql` before deploying
+the review-completion update. It backs up legacy metrics, fills missing `score`
+from `accuracy_score`, removes obsolete score columns and adds review failure tracking.
+Incomplete historical reviews need Retry analysis; summaries and levels are not invented.

@@ -33,6 +33,7 @@ from services.discussion_analysis import (
     analyze_pending_messages,
     decode_error_context,
     finalize_session_review,
+    review_is_complete,
 )
 
 from services.topic_categories import resolve_category
@@ -455,7 +456,7 @@ def end_session(
 ):
     require_user_daily_limit(current_user, "chat:session-summary", SESSION_SUMMARY_PER_DAY)
     session = _owned_session(db, session_id, current_user.id)
-    if session.ended_at is not None and session.summary is not None:
+    if session.ended_at is not None and review_is_complete(session):
         return {"message": "Session already ended", "session_id": session_id, "review_status": "ready"}
     user_message_count = db.query(models.Message.id).filter(
         models.Message.session_id == session_id,
@@ -466,7 +467,7 @@ def end_session(
         db.commit()
         return {"message": "Empty session discarded", "session_id": None, "review_status": None}
     session.ended_at = session.ended_at or datetime.now(timezone.utc)
-    session.summary = None
+    session.review_error = None
     session.topic_category = resolve_category(
         db, current_user.id, save_category or session.topic_category, session.id,
     )
@@ -476,7 +477,7 @@ def end_session(
 
 
 def _build_review(session, messages, errors) -> schemas.SessionReviewResponse:
-    status = "active" if session.ended_at is None else ("ready" if session.summary else "preparing")
+    status = "active" if session.ended_at is None else ("ready" if review_is_complete(session) else "failed" if session.review_error else "preparing")
     errors_by_message: dict[int, list] = {}
     for error in errors:
         message_id, public_context = decode_error_context(error.context)
@@ -557,5 +558,7 @@ def retry_session_review(
     session = _owned_session(db, session_id, current_user.id)
     if session.ended_at is None:
         raise HTTPException(status_code=409, detail="Session is still active")
+    session.review_error = None
+    db.commit()
     background_tasks.add_task(finalize_session_review, session_id, current_user.id)
     return {"session_id": session_id, "review_status": "preparing"}

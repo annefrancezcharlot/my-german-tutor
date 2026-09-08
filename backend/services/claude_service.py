@@ -784,33 +784,23 @@ def generate_session_summary(
     ) -> Dict[str, Optional[str]]:
     """Generate a brief end-of-session assessment with Claude."""
     prompt = _build_session_summary_prompt(messages, errors, topic, level)
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=400,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw_text = response.content[0].text.strip()
-
-    try:
-        data = _load_jsonish_object(raw_text)
-    except json.JSONDecodeError:
-        return {
-            "summary": raw_text,
-            "estimated_level": None,
-        }
-
-    estimated_level = str(data.get("estimated_level", "")).upper()
-    if estimated_level not in CEFR_LEVELS:
-        estimated_level = None
-
-    summary = data.get("summary")
-    if not isinstance(summary, str) or not summary.strip():
-        summary = raw_text
-
-    return {
-        "summary": summary.strip(),
-        "estimated_level": estimated_level,
-    }
+    for attempt in range(2):
+        response = client.messages.create(
+            model=MODEL, max_tokens=800,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        try:
+            data = _load_jsonish_object(response.content[0].text.strip())
+            estimated_level = str(data.get("estimated_level", "")).strip().upper()
+            summary = data.get("summary")
+            if estimated_level not in CEFR_LEVELS or not isinstance(summary, str) or not summary.strip():
+                raise ValueError("Assessment requires a nonempty summary and valid CEFR level")
+            return {"summary": summary.strip(), "estimated_level": estimated_level}
+        except (ValueError, TypeError, AttributeError) as exc:
+            if attempt:
+                raise ValueError("Invalid session assessment after retry") from exc
+            prompt += "\nReturn valid JSON with a nonempty summary and estimated_level (A1, A2, B1, B2, C1 or C2)."
+    raise AssertionError("Unreachable")
 
 
 #── Translation ─────────────────────────────────────────────────────────────

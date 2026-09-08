@@ -65,9 +65,9 @@ export const SessionReviewPage: React.FC = () => {
 
       {review.status !== 'ready' ? (
         <div className="rounded-2xl border border-cyan-700/50 bg-cyan-950/30 p-5 text-center sm:p-8">
-          <Loader2 className="mx-auto animate-spin text-cyan-300" size={28} />
-          <h2 className="mt-4 font-semibold">{takingLonger ? 'Your review is taking longer than expected' : 'Preparing your detailed feedback'}</h2>
-          <p className="mt-2 text-sm text-slate-400">{takingLonger ? 'Your conversation is saved. Analysis may have failed. Use Retry analysis to try again.' : 'Your conversation is safely saved. Corrections and the assessment will appear here automatically.'}</p>
+          {review.status !== 'failed' && <Loader2 className="mx-auto animate-spin text-cyan-300" size={28} />}
+          <h2 className="mt-4 font-semibold">{review.status === 'failed' ? 'Analysis failed — please retry' : takingLonger ? 'Your review is taking longer than expected' : 'Preparing your detailed feedback'}</h2>
+          <p className="mt-2 text-sm text-slate-400">{review.status === 'failed' || takingLonger ? 'Your conversation is saved. Analysis may have failed. Use Retry analysis to try again.' : 'Your conversation is safely saved. Corrections and the assessment will appear here automatically.'}</p>
           <button onClick={() => void retry()} disabled={retrying} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-40"><RefreshCw size={15} /> Retry analysis</button>
         </div>
       ) : (

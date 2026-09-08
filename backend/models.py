@@ -66,13 +66,11 @@ class ConversationSession(Base):
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)
     score = Column(Float, nullable=True)          # 0-100
-    fluency_score = Column(Float, nullable=True)
-    accuracy_score = Column(Float, nullable=True)
-    vocabulary_score = Column(Float, nullable=True)
     estimated_level = Column(String, nullable=True)
     message_count = Column(Integer, default=0)
     error_count = Column(Integer, default=0)
     summary = Column(Text, nullable=True)
+    review_error = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="sessions")
     messages = relationship("Message", back_populates="session",

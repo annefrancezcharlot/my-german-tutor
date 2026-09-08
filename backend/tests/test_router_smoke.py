@@ -827,3 +827,28 @@ def test_category_normalizes_new_and_predefined_names(db_session, user):
     from services.topic_categories import resolve_category
     assert resolve_category(db_session, user.id, '  New   Topic ') == 'New Topic'
     assert resolve_category(db_session, user.id, ' sOcIeTy ') == 'Society'
+
+
+def test_incomplete_review_can_recover(client, db_session, user, seeded_session, monkeypatch):
+    from datetime import datetime, timezone
+    from services.discussion_analysis import finalize_session_review
+    seeded_session.ended_at = datetime.now(timezone.utc)
+    seeded_session.summary = 'Old summary with missing score and level'
+    db_session.commit()
+    monkeypatch.setattr('services.discussion_analysis.analyze_pending_messages', lambda *args, **kwargs: None)
+    def fail(**kwargs):
+        raise ValueError('Assessment unavailable')
+    monkeypatch.setattr('services.discussion_analysis.generate_session_summary', fail)
+    finalize_session_review(seeded_session.id, user.id)
+    response = client.get(f'/chat/session/{seeded_session.id}/review')
+    assert response.json()['status'] == 'failed'
+    monkeypatch.setattr('services.discussion_analysis.generate_session_summary', lambda **kwargs: {
+        'summary': 'Completed assessment', 'estimated_level': 'B2',
+    })
+    finalize_session_review(seeded_session.id, user.id)
+    db_session.expire_all()
+    assert seeded_session.score is not None
+    assert seeded_session.estimated_level == 'B2'
+    assert seeded_session.summary == 'Completed assessment'
+    assert seeded_session.review_error is None
+    assert client.get(f'/chat/session/{seeded_session.id}/review').json()['status'] == 'ready'

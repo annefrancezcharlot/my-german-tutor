@@ -104,6 +104,12 @@ def analyze_pending_messages(session_id: int, user_id: UUID, force: bool = False
                 db.close()
 
 
+def review_is_complete(session) -> bool:
+    return bool(session.summary and session.summary.strip()
+                and session.score is not None
+                and session.estimated_level in {"A1", "A2", "B1", "B2", "C1", "C2"})
+
+
 def finalize_session_review(session_id: int, user_id: UUID) -> None:
     """Flush hidden analysis and generate the persisted session assessment."""
     try:
@@ -114,7 +120,7 @@ def finalize_session_review(session_id: int, user_id: UUID) -> None:
                 models.ConversationSession.id == session_id,
                 models.ConversationSession.user_id == user_id,
             ).first()
-            if not session or session.summary is not None:
+            if not session or review_is_complete(session):
                 return
             messages = db.query(models.Message).filter(
                 models.Message.session_id == session_id,
@@ -142,10 +148,14 @@ def finalize_session_review(session_id: int, user_id: UUID) -> None:
                 user_texts=[message["content"] for message in learner_messages],
                 errors=[{"severity": error.severity} for error in errors],
             )["score"]
-            session.summary = assessment.get("summary") or "Session review complete."
+            if not assessment.get("summary") or assessment.get("estimated_level") not in {
+                "A1", "A2", "B1", "B2", "C1", "C2",
+            }:
+                raise ValueError("Assessment requires a summary and valid estimated level")
+            session.summary = assessment["summary"]
             session.estimated_level = assessment.get("estimated_level")
             session.score = score
-            session.accuracy_score = score
+            session.review_error = None
             session.error_count = len(errors)
             session.message_count = len(messages)
             if session.ended_at is None:
@@ -158,3 +168,18 @@ def finalize_session_review(session_id: int, user_id: UUID) -> None:
             db.close()
     except Exception:
         logger.exception("discussion.review_failed session_id=%s", session_id)
+
+        failure_db = SessionLocal()
+        try:
+            failed_session = failure_db.query(models.ConversationSession).filter(
+                models.ConversationSession.id == session_id,
+                models.ConversationSession.user_id == user_id,
+            ).first()
+            if failed_session and not review_is_complete(failed_session):
+                failed_session.review_error = "Analysis failed. Your conversation is saved. Please retry analysis."
+                failure_db.commit()
+        except Exception:
+            failure_db.rollback()
+            logger.exception("discussion.review_failure_status_failed session_id=%s", session_id)
+        finally:
+            failure_db.close()
