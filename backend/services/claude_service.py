@@ -669,6 +669,15 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
     if "corrections" not in item:
         raise ValueError("Missing corrections array")
     corrections, suggestions, spans = [], [], []
+    # Process actual errors before optional style entries, including legacy style categories.
+    item = item.copy()
+    if isinstance(item.get("corrections"), list) and isinstance(item.get("suggestions", []), list):
+        item["suggestions"] = item.get("suggestions", []) + [
+            entry for entry in item["corrections"]
+            if isinstance(entry, dict) and entry.get("category") == "style"
+        ]
+        item["corrections"] = [entry for entry in item["corrections"]
+                               if not isinstance(entry, dict) or entry.get("category") != "style"]
     for key in ("corrections", "suggestions"):
         entries = item.get(key, [])
         if not isinstance(entries, list):
@@ -688,9 +697,14 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
             if before.casefold() == after.casefold():
                 continue
             start, end = starts[0], starts[0] + len(before)
+            optional = key == "suggestions"
             if any(start < old_end and end > old_start for old_start, old_end, _ in spans):
-                raise ValueError("Edits overlap; combine them or omit the suggestion")
-            optional = key == "suggestions" or entry.get("category") == "style"
+                if optional:
+                    # An optional alternative must never block valid grammar feedback.
+                    continue
+                if (start, end, after) in spans:
+                    continue  # The same edit was reported under two grammar rules.
+                raise ValueError("Corrections overlap; combine all corrections into one full-message edit")
             if optional:
                 suggestions.append({k: entry[k] for k in ("original", "corrected", "explanation")})
             else:
@@ -740,7 +754,13 @@ def analyze_message_batch(messages: List[Dict[str, Any]], level: str = "C1") -> 
         except (ValueError, TypeError, KeyError, IndexError) as exc:
             if attempt:
                 raise ValueError("Invalid correction analysis after retry") from exc
-            prompt += f"\nPrevious analysis failed validation: {exc}. Regenerate the complete batch."
+            prompt += (
+                f"\nPrevious analysis failed validation: {exc}. Regenerate the complete batch."
+                " For each message with errors, return exactly ONE correction whose original is"
+                " the entire original message and whose corrected is the entire minimally corrected"
+                " message. Explain all necessary changes together. Return suggestions as an empty"
+                " array on this retry. Preserve the ignored capitalization, typo and ss/ß rules."
+            )
     raise AssertionError("Unreachable")
 
 

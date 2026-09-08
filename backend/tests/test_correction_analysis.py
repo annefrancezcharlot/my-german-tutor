@@ -77,3 +77,37 @@ def test_invalid_batch_fails_after_one_retry(monkeypatch):
     with pytest.raises(ValueError, match='after retry'):
         service.analyze_message_batch([{'message_id': 1, 'content': 'Hallo!'}])
     assert len(calls) == 2
+
+
+def test_optional_overlap_does_not_block_corrections():
+    result = service._validate_message_edits('Ich habe ein Hund.', {
+        'corrections': [edit('Ich habe ein Hund.', 'Ich besitze einen Hund.', 'style'),
+                        edit('ein Hund', 'einen Hund')],
+        'suggestions': [edit('ein Hund', 'einen lieben Hund')],
+    })
+    assert result['corrected_user_message'] == 'Ich habe einen Hund.'
+    assert len(result['corrections']) == 1
+    assert result['suggestions'] == []
+
+
+def test_duplicate_edit_is_counted_once():
+    result = service._validate_message_edits('ein Hund', {
+        'corrections': [edit('ein Hund', 'einen Hund'), edit('ein Hund', 'einen Hund', 'case')],
+    })
+    assert result['corrected_user_message'] == 'einen Hund'
+    assert len(result['corrections']) == 1
+
+
+def test_conflicting_corrections_retry_as_one_edit(monkeypatch):
+    responses = [
+        {'messages': [{'message_id': 1, 'corrections': [edit('ein Hund', 'einen Hund'), edit('Hund', 'Hund!')]}]},
+        {'messages': [{'message_id': 1, 'corrections': [edit('Ich habe ein Hund.', 'Ich habe einen Hund.')]}]},
+    ]
+    calls = []
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(responses.pop(0)))])
+    monkeypatch.setattr(service.client.messages, 'create', create)
+    result = service.analyze_message_batch([{'message_id': 1, 'content': 'Ich habe ein Hund.'}])
+    assert result[0]['corrected_user_message'] == 'Ich habe einen Hund.'
+    assert 'exactly ONE correction' in calls[1]['messages'][0]['content']
