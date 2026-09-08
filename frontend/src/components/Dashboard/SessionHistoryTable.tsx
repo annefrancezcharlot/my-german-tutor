@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
 import type { ConversationSession } from '../../types';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 
-interface Props { sessions: ConversationSession[]; }
+interface Props { sessions: ConversationSession[]; onDelete: (id: number) => Promise<void>; }
 
-export const SessionHistoryTable: React.FC<Props> = ({ sessions }) => {
+export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => {
   const [expanded, setExpanded] = useState<number | null>(null);
+
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const remove = async (session: ConversationSession) => {
+    if (!window.confirm(`Delete conversation “${session.topic}”? Its messages and review will be permanently removed.`)) return;
+    setDeleting(session.id);
+    setDeleteError(null);
+    try {
+      await onDelete(session.id);
+    } catch {
+      setDeleteError('The conversation could not be deleted. Please try again.');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('de-DE', {
@@ -24,6 +39,7 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions }) => {
 
   return (
     <div className="overflow-x-auto">
+      {deleteError && <p role="alert" className="mb-3 text-sm text-red-300">{deleteError}</p>}
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-slate-400 border-b border-slate-700">
@@ -33,6 +49,7 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions }) => {
             <th className="pb-2 pr-4 font-medium text-center">Messages</th>
             <th className="pb-2 pr-4 font-medium text-center">Mistakes</th>
             <th className="pb-2 font-medium text-center">Score</th>
+            <th className="pb-2 pl-3 font-medium">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700/50">
@@ -73,13 +90,21 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions }) => {
                       : <ChevronDown size={13} className="inline" />}
                   </span>
                 </td>
+                <td className="py-3 pl-3">
+                  <button type="button" disabled={deleting !== null}
+                    aria-label={`Delete conversation: ${s.topic}`}
+                    onClick={event => { event.stopPropagation(); void remove(s); }}
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-red-300 hover:bg-red-950/50 disabled:opacity-50">
+                    <Trash2 size={16} />{deleting === s.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                </td>
               </tr>
 
               {/* Expanded summary row */}
               {expanded === s.id && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="pb-4 px-2"
                   >
                     <div className="bg-slate-900 rounded-xl p-4 text-xs text-slate-300 leading-relaxed border border-slate-700">

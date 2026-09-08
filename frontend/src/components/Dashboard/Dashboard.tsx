@@ -1,3 +1,4 @@
+import { deleteSession } from '../../api';
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import type {
@@ -47,6 +48,18 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
       setActivityTimeline(activityT);
     }).finally(() => setLoading(false));
   }, [user.id]);
+
+  const handleDeleteSession = async (id: number) => {
+    await deleteSession(id);
+    setSessions(current => current.filter(session => session.id !== id));
+    // Refresh statistics affected by the removed conversation and its errors.
+    const results = await Promise.allSettled([
+      getErrorStats(), getErrorTimeline(), getActivityTimeline(),
+    ]);
+    if (results[0].status === 'fulfilled') setErrorStats(results[0].value);
+    if (results[1].status === 'fulfilled') setTimeline(results[1].value);
+    if (results[2].status === 'fulfilled') setActivityTimeline(results[2].value);
+  };
 
   /* ── Derived stats ──────────────────────────────────────────────── */
   const completedSessions = sessions.filter(s => s.ended_at);
@@ -114,7 +127,7 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
       <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
         <h2 className="font-semibold text-white mb-4">Conversation history</h2>
         {completedSessions.length > 0
-          ? <SessionHistoryTable sessions={completedSessions} />
+          ? <SessionHistoryTable sessions={completedSessions} onDelete={handleDeleteSession} />
           : <EmptyChart label="No completed conversations yet" />}
       </div>
     </div>
