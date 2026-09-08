@@ -53,6 +53,7 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
   const categories = [
     'All',
     ...Array.from(new Set([
+      'Free discussions',
       ...topics.map(t => t.category),
       ...freeConversationTopics.map(item => item.category || 'Free discussions'),
     ])),
@@ -63,12 +64,17 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
   const filteredFreeConversationTopics = activeCategory === 'All'
     ? freeConversationTopics
     : freeConversationTopics.filter(item => (item.category || 'Free discussions') === activeCategory);
-  const groupedFreeDiscussions = filteredFreeConversationTopics.filter(
-    item => !item.category || item.category === 'Free discussions',
-  );
-  const categorizedFreeTopics = filteredFreeConversationTopics.filter(
-    item => item.category && item.category !== 'Free discussions',
-  );
+  const savedTopicGroups = Array.from(filteredFreeConversationTopics.reduce((groups, item) => {
+    const category = item.category || 'Free discussions';
+    if (category === 'Free discussions') return groups;
+    const items = groups.get(category) || [];
+    items.push(item);
+    groups.set(category, items);
+    return groups;
+  }, new Map<string, RecentFreeTopic[]>([[
+    'Free discussions',
+    freeConversationTopics.filter(item => !item.category || item.category === 'Free discussions'),
+  ]])));
   const buildSelection = (topic: Topic, starter: ConversationStarter): SelectedConversation => ({
     topicId: topic.id,
     title: topic.title,
@@ -211,76 +217,40 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
 
       {/* Topic grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {groupedFreeDiscussions.length > 0 && (
-          <div
-            className={clsx(
+        {savedTopicGroups.map(([category, items]) => {
+          const groupId = `saved-category:${category}`;
+          return (
+            <div key={groupId} className={clsx(
               'rounded-xl border p-5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30',
-              CATEGORY_COLORS['Free discussions'],
-            )}
-          >
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Free discussions
+              CATEGORY_COLORS[category] || CATEGORY_COLORS['Free discussions'],
+            )}>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{category}</div>
+              <h3 className="mb-2 text-lg font-bold text-white">{category === 'Free discussions' ? 'Free conversation' : category}</h3>
+              <p className="mb-4 text-sm text-slate-400">{items.length} saved {items.length === 1 ? 'prompt' : 'prompts'}</p>
+              <button type="button"
+                onClick={() => setExpandedTopicId(current => current === groupId ? null : groupId)}
+                aria-expanded={expandedTopicId === groupId}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-900/60">
+                <ChevronDown size={16} className={clsx('transition-transform', expandedTopicId === groupId && 'rotate-180')} />
+                {category === 'Free discussions' ? 'Show free topics' : 'Choose specific prompt'}
+              </button>
+              {expandedTopicId === groupId && (
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                  {items.length === 0 && <p className="text-sm text-slate-400">No free conversations saved yet. Start one using Your own topic above.</p>}
+                  {items.map(item => (
+                    <button key={item.title} type="button" onClick={() => handleFreeConversationTopicStart(item)}
+                      className="block w-full rounded-lg border border-white/10 bg-slate-900/40 p-3 text-left transition-colors hover:bg-slate-900/60">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                        <MessageSquare size={15} className="text-cyan-300" />
+                        {cleanFreeConversationTitle(item.title)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <h3 className="mb-2 text-lg font-bold text-white">Free conversation</h3>
-            <p className="mb-4 text-sm text-slate-400">
-              Restart a conversation that was saved without a specific category.
-            </p>
-            <button
-              type="button"
-              onClick={() => setExpandedTopicId(current => current === 'free-conversation' ? null : 'free-conversation')}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-900/60"
-            >
-              <ChevronDown
-                size={16}
-                className={clsx('transition-transform', expandedTopicId === 'free-conversation' && 'rotate-180')}
-              />
-              Show free topics
-            </button>
-            {expandedTopicId === 'free-conversation' && (
-              <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                {groupedFreeDiscussions.map(item => (
-                  <button
-                    key={item.title}
-                    type="button"
-                    onClick={() => handleFreeConversationTopicStart(item)}
-                    className="block w-full rounded-lg border border-white/10 bg-slate-900/40 p-3 text-left transition-colors hover:bg-slate-900/60"
-                  >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                      <MessageSquare size={15} className="text-cyan-300" />
-                      {cleanFreeConversationTitle(item.title)}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {categorizedFreeTopics.map(item => (
-          <div
-            key={item.title}
-            className={clsx(
-              'rounded-xl border p-5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30',
-              CATEGORY_COLORS[item.category] || CATEGORY_COLORS['Free discussions']
-            )}
-          >
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
-              {item.category || 'Free discussions'}
-            </div>
-            <h3 className="font-bold text-white text-lg mb-2">{cleanFreeConversationTitle(item.title)}</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              {item.description || 'Your saved free conversation topic.'}
-            </p>
-            <button
-              type="button"
-              onClick={() => handleFreeConversationTopicStart(item)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
-            >
-              <MessageSquare size={16} />
-              Start conversation
-            </button>
-          </div>
-        ))}
+          );
+        })}
 
         {filtered.map(topic => (
           <div

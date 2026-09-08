@@ -10,6 +10,7 @@ import schemas
 from auth import CurrentUser, get_current_user
 from database import get_db
 from services.claude_service import rewrite_session_style
+from services.topic_categories import category_key, category_names
 from rate_limits import STYLE_REWRITE_PER_DAY, require_user_daily_limit
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -92,17 +93,20 @@ def get_free_conversation_topics(
         .all()
     )
 
+    names = category_names(db, current_user.id)
     seen = set()
     topics = []
     for row in rows:
         title = _clean_free_conversation_title(row.topic.strip())
-        if not title or title in predefined_titles or title in seen:
+        category = names.get(category_key(row.topic_category or "Free discussions"), "Free discussions")
+        key = (category_key(category), category_key(title))
+        if not title or title in predefined_titles or key in seen:
             continue
 
-        seen.add(title)
+        seen.add(key)
         topics.append({
             "title": title,
-            "category": row.topic_category or "Free discussions",
+            "category": category,
             "description": "Freies Gespraechsthema",
             "last_used_at": row.started_at,
         })

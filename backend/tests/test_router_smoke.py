@@ -794,3 +794,36 @@ def test_optional_suggestions_saved_without_errors(client, db_session, user, see
     assert detail["corrected"] == message.content
     assert detail["corrections"] == []
     assert detail["suggestions"] == [suggestion]
+
+
+def test_save_reuses_category_and_groups_legacy_names(client, db_session, user, seeded_session, monkeypatch):
+    from datetime import datetime, timezone
+    existing = models.ConversationSession(
+        user_id=user.id, topic='First roleplay', topic_category='PH SRK',
+        message_count=2, ended_at=datetime.now(timezone.utc),
+    )
+    legacy = models.ConversationSession(
+        user_id=user.id, topic='Second roleplay', topic_category=' ph  srk ',
+        message_count=2, ended_at=datetime.now(timezone.utc),
+    )
+    duplicate = models.ConversationSession(
+        user_id=user.id, topic=' FIRST roleplay ', topic_category='ph srk',
+        message_count=2, ended_at=datetime.now(timezone.utc),
+    )
+    db_session.add_all([existing, legacy, duplicate])
+    db_session.commit()
+    monkeypatch.setattr('routers.chat.finalize_session_review', lambda *args: None)
+    response = client.post(f'/chat/session/{seeded_session.id}/end', params={'save_category': ' Ph   Srk '})
+    assert response.status_code == 200
+    db_session.refresh(seeded_session)
+    assert seeded_session.topic_category == 'PH SRK'
+    items = client.get('/sessions/free-conversation-topics').json()
+    assert {item['category'] for item in items} == {'PH SRK'}
+    assert len([item for item in items if item['title'].casefold() == 'first roleplay']) == 1
+    assert any(item['title'] == 'Second roleplay' for item in items)
+
+
+def test_category_normalizes_new_and_predefined_names(db_session, user):
+    from services.topic_categories import resolve_category
+    assert resolve_category(db_session, user.id, '  New   Topic ') == 'New Topic'
+    assert resolve_category(db_session, user.id, ' sOcIeTy ') == 'Society'

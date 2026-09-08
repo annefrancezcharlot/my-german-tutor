@@ -35,6 +35,8 @@ from services.discussion_analysis import (
     finalize_session_review,
 )
 
+from services.topic_categories import resolve_category
+
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
 REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime-2.1-mini")
@@ -465,8 +467,9 @@ def end_session(
         return {"message": "Empty session discarded", "session_id": None, "review_status": None}
     session.ended_at = session.ended_at or datetime.now(timezone.utc)
     session.summary = None
-    if save_category and save_category.strip():
-        session.topic_category = save_category.strip()
+    session.topic_category = resolve_category(
+        db, current_user.id, save_category or session.topic_category, session.id,
+    )
     db.commit()
     background_tasks.add_task(finalize_session_review, session_id, current_user.id)
     return {"message": "Session ended", "session_id": session_id, "review_status": "preparing"}

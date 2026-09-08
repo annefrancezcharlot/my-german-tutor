@@ -106,7 +106,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
           ...saved.map(item => item.category),
         ].filter(Boolean))).sort();
         setTopicCategories(categories);
-        setSelectedSaveCategory(current => current || categories[0] || 'Free discussions');
+        setSelectedSaveCategory(current => current || topic.category || categories[0] || 'Free discussions');
       })
       .catch(() => {
         setTopicCategories([]);
