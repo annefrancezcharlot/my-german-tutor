@@ -16,7 +16,7 @@ import type {
 
 // In local development, Vite proxies /api to the FastAPI server. Deployments can
 // override this with the public backend URL at build time.
-const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+const apiBaseUrl = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: apiBaseUrl,

@@ -13,6 +13,8 @@ const sseResponse = (chunks: string[]) => new Response(new ReadableStream({
 describe('controlled discussion SSE', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.resetModules();
     setAuthTokenProvider(async () => null);
   });
 
@@ -35,6 +37,18 @@ describe('controlled discussion SSE', () => {
     expect(deltas.join('')).toBe('Gut');
     expect(doneId).toBe(10);
     expect(fetchMock.mock.calls[0][1].headers.get('Authorization')).toBe('Bearer token');
+  });
+
+  it('removes trailing slashes from the deployed backend URL', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://example.onrender.com/');
+    vi.resetModules();
+    const { streamMessage: deployedStreamMessage } = await import('./index');
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse([
+      'event: done\ndata: {"assistant_message_id":10}\n\n',
+    ]));
+    vi.stubGlobal('fetch', fetchMock);
+    await deployedStreamMessage(4, 'Hallo', new AbortController().signal, { onDelta: vi.fn() });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://example.onrender.com/chat/message/stream');
   });
 
   it('surfaces provider failures after preserving partial deltas', async () => {
