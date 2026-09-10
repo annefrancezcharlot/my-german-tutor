@@ -1,16 +1,21 @@
 import logging
 import random
 import json
+import math
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
-from services.claude_service import classify_exercise_topic, generate_exercise
+from services.claude_service import (
+    classify_exercise_topic,
+    generate_exercise,
+    generate_vocabulary_cloze,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +120,177 @@ def create_vocabulary_cloze_exercise(
     db.commit()
     db.refresh(exercise)
     return exercise
+
+
+def _swiss_text(value: Any) -> Any:
+    """Ensure generated content follows Swiss Standard German spelling."""
+    if isinstance(value, str):
+        return value.replace("ß", "ss")
+    if isinstance(value, list):
+        return [_swiss_text(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: item if key == "card_id" else _swiss_text(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _validate_generated_vocabulary_cloze(
+    data: Dict[str, Any],
+    cards: List[models.FlashcardCard],
+) -> Dict[str, Any]:
+    data = _swiss_text(data)
+    expected_card_ids = [card.card_id for card in cards]
+    gaps = data.get("gaps")
+    source_text = data.get("source_text")
+    word_bank = data.get("word_bank")
+    errors: List[str] = []
+
+    if not isinstance(data.get("title"), str) or not data["title"].strip():
+        errors.append("title is missing")
+    if not isinstance(source_text, str) or not source_text.strip():
+        errors.append("source_text is missing")
+        source_text = ""
+    if not isinstance(gaps, list) or len(gaps) != len(cards):
+        errors.append(f"expected {len(cards)} gaps")
+        gaps = gaps if isinstance(gaps, list) else []
+    if not isinstance(word_bank, list) or len(word_bank) != len(cards):
+        errors.append(f"expected {len(cards)} word-bank entries")
+        word_bank = word_bank if isinstance(word_bank, list) else []
+    elif any(not isinstance(item, str) or not item.strip() for item in word_bank):
+        errors.append("word-bank entries must be non-empty strings")
+
+    actual_card_ids: List[str] = []
+    answers: List[str] = []
+    for index, gap in enumerate(gaps, start=1):
+        if not isinstance(gap, dict):
+            errors.append(f"gap {index} is not an object")
+            continue
+        if gap.get("id") != index:
+            errors.append(f"gap {index} has the wrong id")
+        if source_text.count(f"[{index}]") != 1:
+            errors.append(f"marker [{index}] must occur exactly once")
+        card_id = gap.get("card_id")
+        if isinstance(card_id, str):
+            actual_card_ids.append(card_id)
+        answer = gap.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            errors.append(f"gap {index} has no answer")
+            continue
+        answer = answer.strip()
+        gap["answer"] = answer
+        answers.append(answer)
+        accepted = gap.get("accepted_answers")
+        if not isinstance(accepted, list):
+            accepted = []
+        accepted = [item.strip() for item in accepted if isinstance(item, str) and item.strip()]
+        if answer.casefold() not in {item.casefold() for item in accepted}:
+            accepted.insert(0, answer)
+        gap["accepted_answers"] = list(dict.fromkeys(accepted))
+
+    if sorted(actual_card_ids) != sorted(expected_card_ids):
+        errors.append("card ids must use every supplied flashcard exactly once")
+    if [str(item).strip().casefold() for item in word_bank] != [
+        answer.casefold() for answer in answers
+    ]:
+        errors.append("word_bank must contain the gap answers in gap order")
+    marker_ids = [int(item) for item in re.findall(r"\[(\d+)\]", source_text)]
+    if sorted(marker_ids) != list(range(1, len(cards) + 1)):
+        errors.append("source_text contains missing, duplicate, or unknown markers")
+
+    if errors:
+        raise ValueError("; ".join(dict.fromkeys(errors)))
+    return data
+
+
+def create_flashcard_vocabulary_cloze_exercises(
+    db: Session,
+    user_id: UUID,
+    flashcard_set: models.FlashcardSet,
+    count: Optional[int],
+) -> List[models.Exercise]:
+    """Generate, validate, and persist cloze passages for one flashcard set."""
+    cards = list(flashcard_set.cards)
+    if count is not None and count > len(cards):
+        raise ValueError(f"Requested {count} cards from a set containing {len(cards)}")
+    requested_count = len(cards) if count is None else count
+    selected_cards = random.sample(cards, k=min(requested_count, len(cards)))
+    if not selected_cards:
+        return []
+
+    # Keep passages reasonably short without producing a tiny remainder.
+    # Examples: 12 -> [12], 20 -> [10, 10], 25 -> [9, 8, 8].
+    batch_count = max(1, math.ceil(len(selected_cards) / 12))
+    base_batch_size, larger_batch_count = divmod(len(selected_cards), batch_count)
+    batch_sizes = [
+        base_batch_size + (1 if index < larger_batch_count else 0)
+        for index in range(batch_count)
+    ]
+
+    created: List[models.Exercise] = []
+    batch_start = 0
+    for batch_size in batch_sizes:
+        batch = selected_cards[batch_start:batch_start + batch_size]
+        batch_start += batch_size
+        card_payload = [
+            {
+                "id": card.card_id,
+                "front": card.front,
+                "back": card.back,
+                "example": card.example or "",
+                "case_examples": card.case_examples if isinstance(card.case_examples, dict) else {},
+                "tense_examples": card.tense_examples if isinstance(card.tense_examples, dict) else {},
+            }
+            for card in batch
+        ]
+        validation_feedback: Optional[str] = None
+        generated: Optional[Dict[str, Any]] = None
+        for _ in range(2):
+            candidate = generate_vocabulary_cloze(
+                cards=card_payload,
+                set_title=flashcard_set.title,
+                level=flashcard_set.level,
+                validation_feedback=validation_feedback,
+            )
+            try:
+                generated = _validate_generated_vocabulary_cloze(candidate, batch)
+                break
+            except ValueError as exc:
+                validation_feedback = str(exc)
+        if generated is None:
+            raise ValueError(f"Vocabulary exercise validation failed: {validation_feedback}")
+
+        gaps = generated["gaps"]
+        content = {
+            "id": f"flashcard_cloze_{uuid4().hex}",
+            "source_set_id": flashcard_set.id,
+            "source_card_ids": [gap["card_id"] for gap in gaps],
+            "topic_id": flashcard_set.topic,
+            "topic_label": flashcard_set.title,
+            "source_text": generated["source_text"],
+            "word_bank": generated["word_bank"],
+            "gaps": gaps,
+            "preparation_use": False,
+            "standalone_use": True,
+        }
+        exercise = models.Exercise(
+            user_id=user_id,
+            error_category="vocabulary",
+            exercise_type="vocabulary_cloze",
+            title=generated["title"],
+            instructions="Setze das passende Wort aus der Wortliste in jede Lücke ein.",
+            content=content,
+            answer_key={str(gap["id"]): gap["accepted_answers"] for gap in gaps},
+            difficulty=flashcard_set.level,
+        )
+        db.add(exercise)
+        created.append(exercise)
+
+    db.commit()
+    for exercise in created:
+        db.refresh(exercise)
+    return created
 
 
 def extract_noun_candidates(text: str) -> List[str]:
@@ -336,7 +512,13 @@ def create_exercises_for_user(
     topic_subcategory: Optional[str] = None
 
     if focus_categories:
-        categories = [{"category": c, "count": 0} for c in focus_categories]
+        # Vocabulary exercises are created from a selected flashcard set through
+        # the dedicated cloze flow, never from the legacy prewritten library.
+        categories = [
+            {"category": c, "count": 0}
+            for c in focus_categories
+            if c != "vocabulary"
+        ]
     elif topic_focus:
         try:
             topic_classification = classify_exercise_topic(topic_focus)
@@ -351,7 +533,10 @@ def create_exercises_for_user(
             )
             categories = [{"category": "grammar", "count": 0}]
     else:
-        categories = get_weak_categories(db, user_id, limit=count)
+        categories = [
+            item for item in get_weak_categories(db, user_id, limit=count + 1)
+            if item["category"] != "vocabulary"
+        ][:count]
 
     if not categories:
         # No error data yet → general review exercises
@@ -483,28 +668,6 @@ def score_exercise(
             variants = {normalize(value) for value in correct_ans}
         else:
             variants = {normalize(correct_ans)}
-        content = exercise.content if isinstance(exercise.content, dict) else {}
-        gaps = content.get("gaps", [])
-        gap = next(
-            (
-                item for item in gaps
-                if isinstance(item, dict) and str(item.get("id")) == str(item_id)
-            ),
-            None,
-        )
-        if not gap:
-            return variants
-
-        for value in (gap.get("answer"), gap.get("lemma")):
-            if not value:
-                continue
-
-            normalized_value = normalize(value)
-            variants.add(normalized_value)
-            parts = normalized_value.split()
-            if parts:
-                variants.add(parts[-1])
-
         return variants
 
     def add_item_result(

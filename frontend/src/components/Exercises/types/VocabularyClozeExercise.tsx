@@ -57,6 +57,7 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
   const wordBankAnswerVariants = useMemo(() => {
     return wordBankEntries.map(entry => {
       const variants = new Set<string>();
+      addAnswerVariant(variants, entry.label);
       const gapId = entry.gap_id === null || entry.gap_id === undefined
         ? null
         : String(entry.gap_id);

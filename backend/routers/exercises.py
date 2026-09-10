@@ -8,7 +8,11 @@ import models
 import schemas
 from auth import CurrentUser, get_current_user
 from database import get_db
-from services.exercise_engine import create_exercises_for_user, score_exercise
+from services.exercise_engine import (
+    create_exercises_for_user,
+    create_flashcard_vocabulary_cloze_exercises,
+    score_exercise,
+)
 from rate_limits import EXERCISE_GENERATE_PER_HOUR, HOUR, require_user_rate_limit
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
@@ -25,16 +29,17 @@ def _public_exercise_content(exercise: models.Exercise) -> dict:
     word_bank = public_content.get("word_bank") if isinstance(public_content.get("word_bank"), list) else []
     word_bank_entries = []
 
-    for index, word in enumerate(word_bank):
-        gap = gaps[index] if index < len(gaps) and isinstance(gaps[index], dict) else None
+    for word in word_bank:
         word_bank_entries.append({
             "label": word,
-            "gap_id": gap.get("id") if gap else None,
+            "gap_id": None,
         })
 
     for gap in gaps:
         if isinstance(gap, dict):
             gap.pop("answer", None)
+            gap.pop("accepted_answers", None)
+            gap.pop("source_term", None)
 
     public_content["word_bank_entries"] = word_bank_entries
     return public_content
@@ -58,7 +63,6 @@ def _exercise_response(exercise: models.Exercise) -> schemas.ExerciseResponse:
     completed = len(attempts) > 0
     latest_attempt = attempts[-1] if attempts else None
     content = exercise.content if isinstance(exercise.content, dict) else {}
-    is_vocabulary_cloze = exercise.exercise_type == "vocabulary_cloze"
     is_gender_choice = (
         exercise.error_category == "gender"
         and exercise.exercise_type == "multiple_choice"
@@ -76,7 +80,7 @@ def _exercise_response(exercise: models.Exercise) -> schemas.ExerciseResponse:
         difficulty=exercise.difficulty,
         completed=completed,
         score=latest_attempt.score if latest_attempt else None,
-        correct_answers=exercise.answer_key if completed or is_gender_choice or is_vocabulary_cloze else None,
+        correct_answers=exercise.answer_key if completed or is_gender_choice else None,
         attempts=attempts,
         created_at=exercise.created_at,
     )
@@ -109,6 +113,50 @@ def generate_exercises(
     )
 
     return [_exercise_response(e) for e in exercises]
+
+
+@router.post("/vocabulary-cloze/generate", response_model=List[schemas.ExerciseResponse])
+def generate_flashcard_vocabulary_cloze(
+    request: schemas.VocabularyClozeGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    require_user_rate_limit(
+        current_user,
+        "exercises:generate",
+        EXERCISE_GENERATE_PER_HOUR,
+        HOUR,
+    )
+    flashcard_set = (
+        db.query(models.FlashcardSet)
+        .filter(
+            models.FlashcardSet.id == request.set_id,
+            (models.FlashcardSet.user_id == current_user.id)
+            | (models.FlashcardSet.user_id.is_(None)),
+        )
+        .first()
+    )
+    if not flashcard_set:
+        raise HTTPException(status_code=404, detail="Flashcard set not found")
+    card_count = len(flashcard_set.cards)
+    if card_count == 0:
+        raise HTTPException(status_code=400, detail="The flashcard set has no cards")
+    if request.count is not None and request.count > card_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This flashcard set contains only {card_count} cards",
+        )
+    try:
+        exercises = create_flashcard_vocabulary_cloze_exercises(
+            db=db,
+            user_id=current_user.id,
+            flashcard_set=flashcard_set,
+            count=request.count,
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail="Vocabulary exercise generation failed") from exc
+    return [_exercise_response(exercise) for exercise in exercises]
 
 
 @router.get("/me", response_model=List[schemas.ExerciseResponse])

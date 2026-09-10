@@ -1021,6 +1021,64 @@ def generate_flashcard_set(
     }
 
 
+def generate_vocabulary_cloze(
+    cards: List[Dict[str, Any]],
+    set_title: str,
+    level: str,
+    validation_feedback: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create one compact cloze passage from a batch of flashcards."""
+    cards_json = json.dumps(cards, ensure_ascii=False, indent=2)
+    retry_instruction = (
+        f"\nThe previous response was invalid. Correct these problems: {validation_feedback}"
+        if validation_feedback
+        else ""
+    )
+    prompt = f"""You are creating a vocabulary cloze exercise for a {level} learner of Swiss Standard German.
+
+Flashcard set: {set_title}
+FLASHCARDS:
+{cards_json}
+
+Create one short, coherent German passage. Use every supplied flashcard exactly once and create exactly one numbered gap per flashcard.
+
+Pedagogical rules:
+- Hide only the smallest meaningful vocabulary target, normally the head verb, adjective, adverb, or noun.
+- Keep the rest of a multi-word expression visible and grammatically adapted to the sentence. Keep articles, objects, reflexive pronouns, governed prepositions, and complements visible when the target is a verb.
+- For a separable verb, strongly prefer a modal + infinitive construction so the complete infinitive is one contiguous answer, e.g. "Sie möchte den Kontakt zu ihm [1]" with answer "aufnehmen". Never split one answer across two gaps and never ask only for the particle.
+- Each gap must have exactly one plausible answer from the word bank. Avoid contexts in which synonyms from the supplied cards would both fit.
+- Use natural Swiss Standard German. Always write ss, never ß. Preserve ä, ö, and ü; do not write ae, oe, or ue.
+- The word_bank contains only the exact short answers learners type, not the complete flashcard expressions.
+- accepted_answers contains only genuinely interchangeable spellings or forms. It must include answer.
+- Copy each input card id exactly into its corresponding gap.
+
+Return ONLY this JSON structure:
+{{
+  "title": "short German title",
+  "source_text": "passage containing [1], [2], ...",
+  "word_bank": ["answer for gap 1", "answer for gap 2"],
+  "gaps": [
+    {{
+      "id": 1,
+      "card_id": "exact input card id",
+      "source_term": "original flashcard front",
+      "answer": "exact missing text",
+      "accepted_answers": ["exact missing text"],
+      "hint": "short definition that does not contain the answer"
+    }}
+  ]
+}}
+{retry_instruction}"""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=max(2200, min(6000, len(cards) * 500)),
+        system=EXERCISE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return _load_jsonish_object(response.content[0].text.strip())
+
+
 #── Style rewrite ───────────────────────────────────────────────────────────
 
 def _normalize_style_rewrites(

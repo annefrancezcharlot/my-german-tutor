@@ -262,6 +262,9 @@ class TeacherRuleResponse(BaseModel):
 class VocabularyClozeGap(BaseModel):
     id: int
     answer: str
+    accepted_answers: List[str] = Field(default_factory=list)
+    card_id: Optional[str] = None
+    source_term: Optional[str] = None
     hint: Optional[str] = None
     lemma: Optional[str] = None
 
@@ -282,6 +285,11 @@ class ExerciseGenerateRequest(BaseModel):
     focus_categories: Optional[List[str]] = None   # None → auto from weak points
     topic: Optional[str] = Field(default=None, max_length=200)
     count: int = Field(default=3, ge=1, le=10)
+
+
+class VocabularyClozeGenerateRequest(BaseModel):
+    set_id: str = Field(min_length=1, max_length=160)
+    count: Optional[int] = Field(default=10, ge=1)
 
 
 class ExerciseAttemptResponse(BaseModel):

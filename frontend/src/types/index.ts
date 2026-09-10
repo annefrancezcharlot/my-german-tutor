@@ -235,11 +235,16 @@ export interface ExerciseContent {
   }>;
   topic_id?: string;
   topic_label?: string;
+  source_set_id?: string;
+  source_card_ids?: string[];
   source_text?: string;
   word_bank?: string[];
   gaps?: Array<{
     id: number;
     answer?: string;
+    accepted_answers?: string[];
+    card_id?: string;
+    source_term?: string;
     hint?: string;
     lemma?: string;
   }>;
@@ -264,6 +269,8 @@ export interface ExerciseResult {
   item_results: ExerciseAttemptItemResult[];
   attempt_number?: number;
 }
+
+export type VocabularyClozeSelection = number | 'all';
 
 export interface FlashcardSetSummary {
   id: string;

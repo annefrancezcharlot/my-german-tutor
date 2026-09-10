@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 import type {
   User, Topic, RecentFreeTopic, ConversationSession, ChatResponse,
-  ErrorRecord, ErrorStats, Exercise, ExerciseResult,
+  ErrorRecord, ErrorStats, Exercise, ExerciseResult, VocabularyClozeSelection,
   TimelineEntry, ExerciseTimelineEntry, ActivityTimelineEntry,
   Message, StyleRewriteMode, StyleRewriteResponse,
   Flashcard, FlashcardExtendResult, FlashcardSetSummary, FlashcardSet,
@@ -375,6 +375,15 @@ export const generateExercises = (
     focus_categories: focusCategories,
     count,
     ...(topic?.trim() ? { topic: topic.trim() } : {}),
+  }).then(r => r.data);
+
+export const generateVocabularyClozeExercises = (
+  setId: string,
+  selection: VocabularyClozeSelection,
+): Promise<Exercise[]> =>
+  api.post('/exercises/vocabulary-cloze/generate', {
+    set_id: setId,
+    count: selection === 'all' ? null : selection,
   }).then(r => r.data);
 
 export const getUserExercises = (

@@ -21,6 +21,7 @@ import auth
 import database
 import models
 import rate_limits
+import services.exercise_engine as exercise_engine
 from routers.chat import (
     _build_realtime_instructions,
     _build_realtime_transcription,
@@ -166,6 +167,200 @@ def _fake_auth_response(user_id: UUID = USER_ID):
             user_metadata={"username": "smoke-user"},
         ),
     )
+
+
+def test_flashcard_cloze_is_stored_for_later_attempts(
+    db_session,
+    user,
+    monkeypatch,
+):
+    flashcard_set = models.FlashcardSet(
+        id="contacts-b2",
+        user_id=user.id,
+        topic="Kontakte",
+        level="B2",
+        title="Kontakte pflegen",
+        description="",
+    )
+    flashcard_set.cards.extend([
+        models.FlashcardCard(
+            card_id="kontakt-aufnehmen",
+            position=1,
+            front="den Kontakt zu jemandem aufnehmen",
+            back="to contact someone",
+            example="Sie nahm Kontakt zu ihm auf.",
+            case_examples={},
+            tense_examples={},
+            tags=[],
+        ),
+        models.FlashcardCard(
+            card_id="kontakt-abbrechen",
+            position=2,
+            front="den Kontakt abbrechen",
+            back="to break off contact",
+            example="Sie brach den Kontakt ab.",
+            case_examples={},
+            tense_examples={},
+            tags=[],
+        ),
+    ])
+    db_session.add(flashcard_set)
+    db_session.commit()
+
+    def fake_generate(**kwargs):
+        assert len(kwargs["cards"]) == 2
+        return {
+            "title": "Kontakt halten",
+            "source_text": (
+                "Nach dem Treffen möchte Lea den Kontakt zu ihrer Kollegin [1]. "
+                "Schließlich muss sie den Kontakt leider [2]."
+            ),
+            "word_bank": ["aufnehmen", "abbrechen"],
+            "gaps": [
+                {
+                    "id": 1,
+                    "card_id": "kontakt-aufnehmen",
+                    "source_term": "den Kontakt zu jemandem aufnehmen",
+                    "answer": "aufnehmen",
+                    "accepted_answers": ["aufnehmen"],
+                    "hint": "eine Verbindung beginnen",
+                },
+                {
+                    "id": 2,
+                    "card_id": "kontakt-abbrechen",
+                    "source_term": "den Kontakt abbrechen",
+                    "answer": "abbrechen",
+                    "accepted_answers": ["abbrechen"],
+                    "hint": "eine Verbindung beenden",
+                },
+            ],
+        }
+
+    monkeypatch.setattr(exercise_engine, "generate_vocabulary_cloze", fake_generate)
+    generated = exercise_engine.create_flashcard_vocabulary_cloze_exercises(
+        db=db_session,
+        user_id=user.id,
+        flashcard_set=flashcard_set,
+        count=2,
+    )
+    assert len(generated) == 1
+    stored = db_session.query(models.Exercise).filter(models.Exercise.id == generated[0].id).one()
+    assert stored.content["source_set_id"] == "contacts-b2"
+    assert stored.content["source_text"].startswith("Nach dem Treffen")
+    assert "ß" not in str(stored.content)
+    assert stored.answer_key == {"1": ["aufnehmen"], "2": ["abbrechen"]}
+
+
+def test_vocabulary_scoring_does_not_accept_last_word_of_a_phrase():
+    exercise = SimpleNamespace(
+        exercise_type="vocabulary_cloze",
+        answer_key={"1": "den Kontakt zu jemandem aufnehmen"},
+        content={},
+    )
+
+    result = exercise_engine.score_exercise(exercise, {"1": "aufnehmen"})
+
+    assert result["score"] == 0
+
+
+def test_flashcard_cloze_rejects_count_larger_than_set(db_session, user):
+    flashcard_set = models.FlashcardSet(
+        id="small-set",
+        user_id=user.id,
+        topic="Small",
+        level="B2",
+        title="Small set",
+        description="",
+    )
+    flashcard_set.cards.append(models.FlashcardCard(
+        card_id="only-card",
+        position=1,
+        front="ein Wort",
+        back="a word",
+        example="",
+        case_examples={},
+        tense_examples={},
+        tags=[],
+    ))
+
+    with pytest.raises(ValueError, match="Requested 20 cards"):
+        exercise_engine.create_flashcard_vocabulary_cloze_exercises(
+            db=db_session,
+            user_id=user.id,
+            flashcard_set=flashcard_set,
+            count=20,
+        )
+
+
+@pytest.mark.parametrize(
+    ("card_count", "expected_batch_sizes"),
+    [
+        (12, [12]),
+        (20, [10, 10]),
+        (25, [9, 8, 8]),
+    ],
+)
+def test_flashcard_cloze_balances_passage_sizes(
+    db_session,
+    user,
+    monkeypatch,
+    card_count,
+    expected_batch_sizes,
+):
+    flashcard_set = models.FlashcardSet(
+        id=f"batching-{card_count}",
+        user_id=user.id,
+        topic="Wortschatz",
+        level="B2",
+        title="Batching test",
+        description="",
+    )
+    for index in range(1, card_count + 1):
+        flashcard_set.cards.append(models.FlashcardCard(
+            card_id=f"card-{index}",
+            position=index,
+            front=f"Wort {index}",
+            back=f"word {index}",
+            example="",
+            case_examples={},
+            tense_examples={},
+            tags=[],
+        ))
+    db_session.add(flashcard_set)
+    db_session.commit()
+
+    generated_batch_sizes = []
+
+    def fake_generate(**kwargs):
+        cards = kwargs["cards"]
+        generated_batch_sizes.append(len(cards))
+        return {
+            "title": "Wortschatz",
+            "source_text": " ".join(f"Satz [{index}]." for index in range(1, len(cards) + 1)),
+            "word_bank": [f"Antwort {index}" for index in range(1, len(cards) + 1)],
+            "gaps": [
+                {
+                    "id": index,
+                    "card_id": card["id"],
+                    "source_term": card["front"],
+                    "answer": f"Antwort {index}",
+                    "accepted_answers": [f"Antwort {index}"],
+                    "hint": "Hinweis",
+                }
+                for index, card in enumerate(cards, start=1)
+            ],
+        }
+
+    monkeypatch.setattr(exercise_engine, "generate_vocabulary_cloze", fake_generate)
+    exercises = exercise_engine.create_flashcard_vocabulary_cloze_exercises(
+        db=db_session,
+        user_id=user.id,
+        flashcard_set=flashcard_set,
+        count=None,
+    )
+
+    assert generated_batch_sizes == expected_batch_sizes
+    assert [len(exercise.content["gaps"]) for exercise in exercises] == expected_batch_sizes
 
 
 def test_auth_router_sign_in_sign_up_refresh(client, monkeypatch):

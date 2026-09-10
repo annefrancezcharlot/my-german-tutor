@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookMarked, GitMerge, Layers, Loader2, MessageSquare, Mic, MicOff, Pencil, Plus, Sparkles, Trash2, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookMarked, BookOpenCheck, GitMerge, Layers, Loader2, MessageSquare, Mic, MicOff, Pencil, Plus, Sparkles, Trash2, Volume2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   deleteFlashcard,
   deleteFlashcardSet,
   extendFlashcardSet,
   generateFlashcardSet,
+  generateVocabularyClozeExercises,
   getPronunciationFeedback,
   getFlashcardSet,
   getFlashcardSets,
@@ -27,13 +28,14 @@ import type {
   PronunciationFeedbackResponse,
   SelectedConversation,
   User,
+  VocabularyClozeSelection,
 } from '../../types';
 import { createMediaRecorder, playSpeech, stopMediaStream } from '../../utils/audio';
 
 type DetailTab = 'example' | 'cases' | 'tenses';
 type CardStartSide = 'front' | 'back';
 type GenerationMode = 'theme' | 'terms';
-type ManagementMode = 'extend' | 'merge' | 'cards' | null;
+type ManagementMode = 'extend' | 'merge' | 'cards' | 'practice' | null;
 
 const detailLabels: Record<DetailTab, string> = {
   example: 'Example',
@@ -113,6 +115,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [loadingSet, setLoadingSet] = useState(false);
   const [generatingSet, setGeneratingSet] = useState(false);
+  const [generatingExercise, setGeneratingExercise] = useState(false);
   const [savingProgress, setSavingProgress] = useState(false);
   const [lastSavedCount, setLastSavedCount] = useState(0);
   const [initialQueueCount, setInitialQueueCount] = useState(0);
@@ -136,6 +139,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const [vocabularyRecording, setVocabularyRecording] = useState(false);
   const [vocabularyTranscribing, setVocabularyTranscribing] = useState(false);
   const [managementMode, setManagementMode] = useState<ManagementMode>(null);
+  const [clozeSelection, setClozeSelection] = useState<VocabularyClozeSelection>(10);
+  const [customClozeOpen, setCustomClozeOpen] = useState(false);
   const [managingSet, setManagingSet] = useState(false);
   const [managementNotice, setManagementNotice] = useState<string | null>(null);
   const [extendTermsText, setExtendTermsText] = useState('');
@@ -245,6 +250,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       ]);
 
       setSelectedSet(nextSet);
+      setClozeSelection(nextSet.cards.length > 10 ? 10 : 'all');
+      setCustomClozeOpen(false);
       setManagementMode(null);
       setEditingCard(null);
       setExtendTermsText('');
@@ -378,6 +385,24 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setError('The new words could not be added.');
     } finally {
       setManagingSet(false);
+    }
+  };
+
+  const handleGenerateVocabularyExercise = async () => {
+    if (!selectedSet || generatingExercise) return;
+    setGeneratingExercise(true);
+    setError(null);
+    setManagementNotice(null);
+    try {
+      const exercises = await generateVocabularyClozeExercises(selectedSet.id, clozeSelection);
+      const firstExercise = exercises[0];
+      navigate('/exercises', {
+        state: firstExercise ? { openExerciseId: firstExercise.id } : undefined,
+      });
+    } catch {
+      setError('The vocabulary exercise could not be generated. Please try again.');
+    } finally {
+      setGeneratingExercise(false);
     }
   };
 
@@ -909,6 +934,13 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               >
                 <GitMerge size={15} /> Merge with another set
               </button>
+              <button
+                type="button"
+                onClick={() => setManagementMode(current => current === 'practice' ? null : 'practice')}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-600/70 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400 hover:text-white"
+              >
+                <BookOpenCheck size={15} /> Practise vocabulary
+              </button>
               {selectedSet.is_editable && (
                 <button
                   type="button"
@@ -925,6 +957,98 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               <p className="mt-3 text-xs text-slate-400">
                 This is a shared set. Adding words or merging creates a personal set; the original remains unchanged.
               </p>
+            )}
+
+            {managementMode === 'practice' && (
+              <div className="mt-4 space-y-3 border-t border-slate-700 pt-4">
+                <div>
+                  <div className="text-sm font-semibold text-white">Create a saved gap exercise</div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    The generated text and every attempt are saved, so you can repeat the exercise later.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[10, 20].filter(count => count < selectedSet.cards.length).map(count => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => {
+                        setClozeSelection(count);
+                        setCustomClozeOpen(false);
+                      }}
+                      className={clsx(
+                        'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors',
+                        !customClozeOpen && clozeSelection === count
+                          ? 'border-emerald-500 bg-emerald-600 text-white'
+                          : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500',
+                      )}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                  {selectedSet.cards.length > 15 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomClozeOpen(true);
+                        if (clozeSelection === 'all') {
+                          setClozeSelection(Math.min(30, selectedSet.cards.length - 1));
+                        }
+                      }}
+                      className={clsx(
+                        'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors',
+                        customClozeOpen
+                          ? 'border-emerald-500 bg-emerald-600 text-white'
+                          : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500',
+                      )}
+                    >
+                      Custom…
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClozeSelection('all');
+                      setCustomClozeOpen(false);
+                    }}
+                    className={clsx(
+                      'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors',
+                      clozeSelection === 'all'
+                        ? 'border-emerald-500 bg-emerald-600 text-white'
+                        : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500',
+                    )}
+                  >
+                    All ({selectedSet.cards.length})
+                  </button>
+                  {customClozeOpen && (
+                    <label className="flex items-center gap-2 text-xs text-slate-300">
+                      Cards
+                      <input
+                        type="number"
+                        min={1}
+                        max={selectedSet.cards.length}
+                        value={clozeSelection === 'all' ? selectedSet.cards.length : clozeSelection}
+                        onChange={event => {
+                          const value = Number(event.target.value);
+                          setClozeSelection(
+                            Math.min(selectedSet.cards.length, Math.max(1, value || 1)),
+                          );
+                        }}
+                        className="w-20 rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateVocabularyExercise()}
+                    disabled={generatingExercise || selectedSet.cards.length === 0}
+                    className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {generatingExercise && <Loader2 size={15} className="animate-spin" />}
+                    {generatingExercise ? 'Creating text...' : 'Create exercise'}
+                  </button>
+                </div>
+              </div>
             )}
 
             {managementMode === 'extend' && (

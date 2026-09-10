@@ -8,6 +8,7 @@ import { ExerciseCard } from './ExerciseCard';
 import { ExerciseModal } from './ExerciseModal';
 import { Loader2, Zap, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface Props { user: User; }
 
@@ -36,6 +37,8 @@ const dedupeExercises = (items: Exercise[]): Exercise[] => {
 };
 
 export const ExercisesPage: React.FC<Props> = ({ user }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [exercises, setExercises]   = useState<Exercise[]>([]);
   const [errorStats, setErrorStats] = useState<ErrorStats[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -58,6 +61,15 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
   };
 
   useEffect(() => { loadAll(); }, [user.id]);
+
+  useEffect(() => {
+    const openExerciseId = (location.state as { openExerciseId?: number } | null)?.openExerciseId;
+    if (!openExerciseId || loading || selected) return;
+    const exercise = exercises.find(item => item.id === openExerciseId);
+    if (!exercise) return;
+    setSelected(exercise);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [exercises, loading, location.pathname, location.state, navigate, selected]);
 
   /* ── Generate exercises ─────────────────────────────────────────── */
   const handleGenerate = async () => {
@@ -95,9 +107,8 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
 
   /* ── Top categories to select focus ────────────────────────────── */
   const topCategories = Array.from(new Set([
-    'vocabulary',
     'gender',
-    ...errorStats.slice(0, 6).map(s => s.category),
+    ...errorStats.filter(s => s.category !== 'vocabulary').slice(0, 6).map(s => s.category),
   ]));
   const listCategories = Array.from(new Set([
     ...topCategories,
