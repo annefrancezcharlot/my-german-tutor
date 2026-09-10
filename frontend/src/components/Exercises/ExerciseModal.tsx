@@ -4,12 +4,11 @@ import { submitExercise } from '../../api';
 import { FillBlankExercise } from './types/FillBlankExercise';
 import { CorrectionExercise } from './types/CorrectionExercise';
 import { MultipleChoiceExercise } from './types/MultipleChoiceExercise';
-import { TranslationExercise } from './types/TranslationExercise';
 import { VocabularyClozeExercise } from './types/VocabularyClozeExercise';
 import { GenderChoiceExercise } from './types/GenderChoiceExercise';
 import { ResultView } from './ResultView';
 import { CheckCircle2, Loader2, RotateCcw, X, XCircle, AlertCircle } from 'lucide-react';
-import { ERROR_CATEGORY_LABELS } from '../../types';
+import { EXERCISE_CATEGORY_LABELS } from '../../types';
 
 interface Props {
   exercise: Exercise;
@@ -150,7 +149,6 @@ export const ExerciseModal: React.FC<Props> = ({
       case 'fill_blank': return <FillBlankExercise {...props} />;
       case 'correction': return <CorrectionExercise {...props} />;
       case 'multiple_choice': return <MultipleChoiceExercise {...props} />;
-      case 'translation': return <TranslationExercise {...props} />;
       case 'vocabulary_cloze': return (
         <VocabularyClozeExercise {...props} correctAnswers={exercise.correct_answers} />
       );
@@ -167,7 +165,7 @@ export const ExerciseModal: React.FC<Props> = ({
         <div className="flex items-start justify-between p-5 border-b border-slate-700 shrink-0">
           <div>
             <div className="text-xs text-slate-400 mb-1">
-              {ERROR_CATEGORY_LABELS[exercise.error_category] || exercise.error_category}
+              {EXERCISE_CATEGORY_LABELS[exercise.error_category] || exercise.error_category}
               {' · '}{exercise.difficulty}
             </div>
             <h2 className="font-bold text-white text-lg leading-tight">

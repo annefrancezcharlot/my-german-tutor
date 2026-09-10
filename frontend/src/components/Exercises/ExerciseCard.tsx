@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Exercise } from '../../types';
-import { ERROR_CATEGORY_COLORS, ERROR_CATEGORY_LABELS } from '../../types';
+import { ERROR_CATEGORY_COLORS, EXERCISE_CATEGORY_LABELS } from '../../types';
 import { CheckCircle2, Clock, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -13,7 +13,6 @@ const TYPE_ICONS: Record<string, string> = {
   fill_blank:       '✏️',
   correction:       '🔧',
   multiple_choice:  '🔤',
-  translation:      '🌐',
   vocabulary_cloze: '📚',
 };
 
@@ -21,13 +20,12 @@ const TYPE_LABELS: Record<string, string> = {
   fill_blank:      'Fill in the blank',
   correction:      'Error correction',
   multiple_choice: 'Multiple Choice',
-  translation:     'Translation',
   vocabulary_cloze:'Vocabulary cloze',
 };
 
 export const ExerciseCard: React.FC<Props> = ({ exercise, onClick }) => {
   const catColor = ERROR_CATEGORY_COLORS[exercise.error_category] || '#6b7280';
-  const catLabel = ERROR_CATEGORY_LABELS[exercise.error_category] || exercise.error_category;
+  const catLabel = EXERCISE_CATEGORY_LABELS[exercise.error_category] || exercise.error_category;
   const isGenderChoice = exercise.exercise_type === 'multiple_choice' && !!exercise.content.items?.length;
   const typeIcon = isGenderChoice ? '⚥' : TYPE_ICONS[exercise.exercise_type] ?? '📄';
   const typeLabel = isGenderChoice ? 'Gender choice' : TYPE_LABELS[exercise.exercise_type];

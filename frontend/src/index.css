@@ -54,4 +54,25 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  @keyframes exercise-generation-slide {
+    0% {
+      transform: translateX(-110%);
+    }
+    100% {
+      transform: translateX(310%);
+    }
+  }
+
+  .exercise-generation-progress {
+    width: 34%;
+    animation: exercise-generation-slide 1.5s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .exercise-generation-progress {
+      width: 100%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+  }
 }

@@ -175,7 +175,7 @@ class Exercise(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     error_category = Column(String, nullable=False)
-    exercise_type = Column(String, nullable=False)  # "fill_blank"|"translation"|"correction"|"multiple_choice"
+    exercise_type = Column(String, nullable=False)  # "fill_blank"|"correction"|"multiple_choice"|"vocabulary_cloze"
     title = Column(String, nullable=False)
     instructions = Column(Text, nullable=False)
     content = Column(JSON, nullable=False)          # flexible structure per type

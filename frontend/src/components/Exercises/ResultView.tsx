@@ -95,8 +95,6 @@ const correctionSentenceOnly = (value: string | undefined): string | undefined =
 };
 
 const vocabularyAnswerVariants = (
-  content: ExerciseContent,
-  itemId: string,
   correctAnswer: string | string[] | undefined,
 ): string[] => {
   const variants = new Set<string>();
@@ -105,20 +103,13 @@ const vocabularyAnswerVariants = (
     if (!normalized) return;
 
     variants.add(normalized);
-    const parts = normalized.split(/\s+/);
-    if (parts.length > 0) {
-      variants.add(parts[parts.length - 1]);
-    }
   };
 
-  const gap = content.gaps?.find(item => String(item.id) === itemId);
   if (Array.isArray(correctAnswer)) {
     correctAnswer.forEach(addVariant);
   } else {
     addVariant(correctAnswer);
   }
-  addVariant(gap?.lemma);
-
   return Array.from(variants);
 };
 
@@ -144,7 +135,7 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
     const gaps = content.gaps ?? [];
 
     const isAnswerCorrect = (itemId: string) =>
-      vocabularyAnswerVariants(content, itemId, result.correct_answers[itemId])
+      vocabularyAnswerVariants(result.correct_answers[itemId])
         .includes(normalizeAnswer(answers[itemId]));
 
     const renderFilledTextPart = (part: string, index: number) => {

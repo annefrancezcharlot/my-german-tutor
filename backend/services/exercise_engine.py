@@ -19,28 +19,158 @@ from services.claude_service import (
 
 logger = logging.getLogger(__name__)
 
-EXERCISE_TYPES = ["fill_blank", "correction", "multiple_choice", "translation", "vocabulary_cloze"]
+EXERCISE_TYPES = ["fill_blank", "correction", "multiple_choice", "vocabulary_cloze"]
 VOCABULARY_CLOZE_LIBRARY_PATH = (
     Path(__file__).resolve().parents[1] / "content" / "vocabulary_cloze_texts.json"
 )
+SESSION_TOPICS_PATH = Path(__file__).resolve().parents[1] / "content" / "session_topics.json"
 
 # Map error categories to most effective exercise types
 CATEGORY_EXERCISE_MAP: Dict[str, List[str]] = {
-    "grammar":           ["correction", "fill_blank", "multiple_choice"],
+    "grammar":           ["correction", "multiple_choice"],
     "vocabulary":        ["vocabulary_cloze"],
-    "word_order":        ["correction", "fill_blank"],
-    "case":              ["fill_blank", "multiple_choice", "correction"],
+    "word_order":        ["correction"],
+    "case":              ["fill_blank"],
     "gender":            ["gender_choice"],
-    "verb_conjugation":  ["fill_blank", "correction", "multiple_choice"],
-    "preposition":       ["fill_blank", "multiple_choice"],
-    "tense":             ["fill_blank", "correction", "translation"],
-    "spelling":          ["correction", "fill_blank"],
-    "punctuation":       ["correction"],
-    "style":             ["translation", "correction"],
-    "other":             ["correction", "fill_blank"],
+    "verb_conjugation":  ["fill_blank"],
+    "preposition":       ["multiple_choice"],
+    "tense":             ["fill_blank"],
 }
 
-LLM_EXERCISE_TYPES = {"fill_blank", "correction", "multiple_choice", "translation"}
+LLM_EXERCISE_TYPES = {"fill_blank", "correction", "multiple_choice"}
+SUPPORTED_GENERAL_CATEGORIES = {
+    "grammar", "word_order", "case", "gender",
+    "verb_conjugation", "preposition", "tense",
+}
+AUTO_EXERCISE_FALLBACK_CATEGORIES = [
+    "case",
+    "verb_conjugation",
+    "preposition",
+    "word_order",
+]
+
+
+def _exercise_category_family(category: str) -> str:
+    return "verbs_tenses" if category in {"verb_conjugation", "tense"} else category
+
+
+def _distinct_category_items(
+    items: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    selected: List[Dict[str, Any]] = []
+    seen_families: set[str] = set()
+    for item in items:
+        category = item.get("category")
+        if category not in SUPPORTED_GENERAL_CATEGORIES:
+            continue
+        family = _exercise_category_family(category)
+        if family in seen_families:
+            continue
+        selected.append(item)
+        seen_families.add(family)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _is_passive_contrast_focus(*values: Optional[str]) -> bool:
+    focus = " ".join(value for value in values if value).casefold()
+    compact_focus = re.sub(r"[\s_-]+", "", focus)
+    if "zustandspassiv" in compact_focus or "vorgangspassiv" in compact_focus:
+        return True
+    mentions_passive = "passiv" in focus or "passive" in focus
+    mentions_state = "zustand" in focus or "state" in focus
+    mentions_process = "vorgang" in focus or "process" in focus or "event" in focus
+    return mentions_passive and mentions_state and mentions_process
+
+
+def _append_unique_text(target: List[str], value: Any) -> None:
+    if not isinstance(value, str) or not value.strip():
+        return
+    cleaned = value.strip()
+    if cleaned.casefold() not in {item.casefold() for item in target}:
+        target.append(cleaned)
+
+
+def get_exercise_context_topics(
+    db: Session,
+    user_id: UUID,
+    limit: int = 8,
+) -> List[str]:
+    """Return varied personal and catalogue topics for exercise scenarios."""
+    recent_sessions = (
+        db.query(models.ConversationSession)
+        .filter(models.ConversationSession.user_id == user_id)
+        .order_by(models.ConversationSession.started_at.desc())
+        .limit(limit * 2)
+        .all()
+    )
+    personal_topics: List[str] = []
+    for session in recent_sessions:
+        _append_unique_text(personal_topics, session.topic)
+    random.shuffle(personal_topics)
+
+    catalogue_topics: List[str] = []
+    try:
+        with SESSION_TOPICS_PATH.open("r", encoding="utf-8") as handle:
+            catalogue = json.load(handle)
+        for topic in catalogue if isinstance(catalogue, list) else []:
+            if not isinstance(topic, dict):
+                continue
+            _append_unique_text(catalogue_topics, topic.get("title"))
+            for starter in topic.get("conversation_starters", []):
+                if isinstance(starter, dict):
+                    _append_unique_text(catalogue_topics, starter.get("title"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("exercise.context_topics_unavailable error_type=%s", type(exc).__name__)
+    random.shuffle(catalogue_topics)
+
+    contexts = personal_topics[:limit]
+    for topic in catalogue_topics:
+        _append_unique_text(contexts, topic)
+        if len(contexts) >= limit:
+            break
+    return contexts
+
+
+def get_recent_exercise_sentences(
+    db: Session,
+    user_id: UUID,
+    limit: int = 15,
+) -> List[str]:
+    """Collect recent prompts so the generator can avoid close repetitions."""
+    exercises = (
+        db.query(models.Exercise)
+        .filter(models.Exercise.user_id == user_id)
+        .order_by(models.Exercise.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    sentences: List[str] = []
+    for exercise in exercises:
+        content = exercise.content if isinstance(exercise.content, dict) else {}
+        for item in content.get("sentences", []):
+            if isinstance(item, dict):
+                _append_unique_text(sentences, item.get("text"))
+        for item in content.get("questions", []):
+            if isinstance(item, dict):
+                _append_unique_text(sentences, item.get("question"))
+        if len(sentences) >= limit:
+            break
+    return sentences[:limit]
+
+
+def _exercise_prompt_sentences(exercise_data: Dict[str, Any]) -> List[str]:
+    content = exercise_data.get("content")
+    if not isinstance(content, dict):
+        return []
+    values: List[str] = []
+    for collection, field in (("sentences", "text"), ("questions", "question")):
+        for item in content.get(collection, []):
+            if isinstance(item, dict):
+                _append_unique_text(values, item.get(field))
+    return values
 
 
 def load_vocabulary_cloze_library() -> Dict[str, Any]:
@@ -510,19 +640,24 @@ def create_exercises_for_user(
 
     topic_focus = exercise_topic.strip() if exercise_topic else None
     topic_subcategory: Optional[str] = None
+    gender_choice_created_or_pending = has_pending_gender_choice_exercise(db, user_id)
 
     if focus_categories:
         # Vocabulary exercises are created from a selected flashcard set through
         # the dedicated cloze flow, never from the legacy prewritten library.
-        categories = [
-            {"category": c, "count": 0}
-            for c in focus_categories
-            if c != "vocabulary"
-        ]
+        categories = _distinct_category_items(
+            [{"category": category, "count": 0} for category in focus_categories],
+            limit=count,
+        )
     elif topic_focus:
         try:
             topic_classification = classify_exercise_topic(topic_focus)
-            categories = [{"category": topic_classification["category"], "count": 0}]
+            classified_category = topic_classification["category"]
+            categories = (
+                [{"category": classified_category, "count": 0}]
+                if classified_category in SUPPORTED_GENERAL_CATEGORIES
+                else []
+            )
             topic_subcategory = topic_classification.get("subcategory")
         except Exception as e:
             logger.warning(
@@ -533,21 +668,49 @@ def create_exercises_for_user(
             )
             categories = [{"category": "grammar", "count": 0}]
     else:
-        categories = [
-            item for item in get_weak_categories(db, user_id, limit=count + 1)
-            if item["category"] != "vocabulary"
-        ][:count]
+        weak_categories = get_weak_categories(
+            db,
+            user_id,
+            limit=len(SUPPORTED_GENERAL_CATEGORIES),
+        )
+        weak_categories = [
+            item for item in weak_categories
+            if not (
+                item["category"] == "grammar"
+                and not get_subcategories(db, user_id, "grammar")
+            )
+            and not (
+                item["category"] == "gender"
+                and gender_choice_created_or_pending
+            )
+        ]
+        categories = _distinct_category_items(
+            weak_categories,
+            limit=len(SUPPORTED_GENERAL_CATEGORIES),
+        )
+        fallback_items = [
+            {"category": category, "count": 0}
+            for category in AUTO_EXERCISE_FALLBACK_CATEGORIES
+        ]
+        categories = _distinct_category_items(
+            categories + fallback_items,
+            limit=len(SUPPORTED_GENERAL_CATEGORIES),
+        )
 
     if not categories:
-        # No error data yet → general review exercises
-        categories = [{"category": "grammar", "count": 0},
-                      {"category": "case", "count": 0}]
+        if focus_categories or topic_focus:
+            return []
+        # Defensive fallback; automatic selection above normally supplies these.
+        categories = [{"category": "case", "count": 0}]
 
     created: List[models.Exercise] = []
-    gender_choice_created_or_pending = has_pending_gender_choice_exercise(db, user_id)
+    generation_target = min(count, len(categories))
+    context_topics = get_exercise_context_topics(db, user_id, limit=max(generation_target, 8))
+    recent_exercise_sentences = get_recent_exercise_sentences(db, user_id)
 
-    for i in range(count):
-        cat_info = categories[i % len(categories)]
+    for i, cat_info in enumerate(categories):
+        if len(created) >= generation_target:
+            break
         category = cat_info["category"]
 
         subcategories = (
@@ -557,13 +720,25 @@ def create_exercises_for_user(
         )
         example_errors = get_example_errors(db, user_id, category)
 
-        exercise_types = CATEGORY_EXERCISE_MAP.get(category, EXERCISE_TYPES)
-        if topic_focus:
-            exercise_types = [
-                item for item in exercise_types
-                if item in LLM_EXERCISE_TYPES
-            ] or ["fill_blank", "correction", "multiple_choice"]
-        exercise_type = random.choice(exercise_types)
+        # A broad grammar exercise is useful only when a concrete rule is known.
+        if category == "grammar" and not subcategories and not topic_focus:
+            continue
+
+        exercise_variant = (
+            "passive_contrast"
+            if _is_passive_contrast_focus(topic_focus, *subcategories)
+            else None
+        )
+        if exercise_variant == "passive_contrast":
+            exercise_type = "multiple_choice"
+        else:
+            exercise_types = CATEGORY_EXERCISE_MAP.get(category, EXERCISE_TYPES)
+            if topic_focus:
+                exercise_types = [
+                    item for item in exercise_types
+                    if item in LLM_EXERCISE_TYPES
+                ] or ["correction", "multiple_choice"]
+            exercise_type = random.choice(exercise_types)
 
         if exercise_type == "vocabulary_cloze":
             vocab_exercise = create_vocabulary_cloze_exercise(
@@ -597,14 +772,21 @@ def create_exercises_for_user(
                 difficulty=user_level,
                 example_errors=example_errors,
                 exercise_topic=topic_focus,
+                exercise_variant=exercise_variant,
+                context_inspiration=(
+                    context_topics[i % len(context_topics)] if context_topics else None
+                ),
+                avoid_sentences=recent_exercise_sentences,
             )
         except Exception as e:
             logger.warning(
-                "exercise.generation_failed user_id=%s category=%s exercise_type=%s error_type=%s",
+                "exercise.generation_failed user_id=%s category=%s exercise_type=%s "
+                "error_type=%s error_detail=%s",
                 user_id,
                 category,
                 exercise_type,
                 type(e).__name__,
+                str(e)[:500].replace("\n", " "),
             )
             continue
 
@@ -622,6 +804,9 @@ def create_exercises_for_user(
         db.commit()
         db.refresh(db_exercise)
         created.append(db_exercise)
+        for sentence in _exercise_prompt_sentences(exercise_data):
+            _append_unique_text(recent_exercise_sentences, sentence)
+        recent_exercise_sentences = recent_exercise_sentences[-15:]
 
     return created
 
@@ -705,10 +890,7 @@ def score_exercise(
                 feedback.append(message)
                 add_item_result(item_id, user_ans, correct_ans, "correct", message)
             else:
-                message = (
-                    f"✗ Item {item_id}: You wrote '{user_ans}'. "
-                    f"Correct: '{correct_ans}'"
-                )
+                message = f"✗ Item {item_id}: Incorrect."
                 feedback.append(message)
                 add_item_result(item_id, user_ans, correct_ans, "incorrect", message)
 
@@ -716,14 +898,17 @@ def score_exercise(
         for item_id, correct_ans in answer_key.items():
             total += 1
             user_ans = user_answers.get(str(item_id), "")
-            expected_sentence = correction_sentence_only(correct_ans)
+            answer_values = correct_ans if isinstance(correct_ans, list) else [correct_ans]
+            expected_sentences = [correction_sentence_only(value) for value in answer_values]
+            expected_sentence = expected_sentences[0] if expected_sentences else ""
             user_normalized = normalize_sentence(user_ans)
-            correct_normalized = normalize_sentence(expected_sentence)
-            if (
-                user_normalized == correct_normalized
+            is_correct = any(
+                user_normalized == normalize_sentence(candidate)
                 or normalize_without_terminal_punctuation(user_ans)
-                == normalize_without_terminal_punctuation(expected_sentence)
-            ):
+                == normalize_without_terminal_punctuation(candidate)
+                for candidate in expected_sentences
+            )
+            if is_correct:
                 correct += 1
                 message = f"✓ Item {item_id}: Correct!"
                 feedback.append(message)
@@ -732,36 +917,6 @@ def score_exercise(
                 message = f"✗ Item {item_id}: Not quite correct."
                 feedback.append(message)
                 add_item_result(item_id, user_ans, expected_sentence, "incorrect", message)
-
-    elif exercise_type == "translation":
-        # For translation we give full credit on close matches
-        # (In production you'd use Claude to grade these)
-        for item_id, correct_ans in answer_key.items():
-            total += 1
-            user_ans = user_answers.get(str(item_id), "")
-            # Simple keyword overlap scoring
-            correct_words = set(normalize(correct_ans).split())
-            user_words = set(normalize(user_ans).split())
-            overlap = len(correct_words & user_words) / max(len(correct_words), 1)
-            if overlap >= 0.8:
-                correct += 1
-                message = f"✓ Item {item_id}: Great translation!"
-                feedback.append(message)
-                add_item_result(item_id, user_ans, correct_ans, "correct", message)
-            elif overlap >= 0.5:
-                correct += 0.5
-                message = (
-                    f"~ Item {item_id}: Partially correct. "
-                    f"Model answer: '{correct_ans}'"
-                )
-                feedback.append(message)
-                add_item_result(item_id, user_ans, correct_ans, "partial", message)
-            else:
-                message = (
-                    f"✗ Item {item_id}: Model answer: '{correct_ans}'"
-                )
-                feedback.append(message)
-                add_item_result(item_id, user_ans, correct_ans, "incorrect", message)
 
     score = (correct / total * 100) if total > 0 else 0
     return {

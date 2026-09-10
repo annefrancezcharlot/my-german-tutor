@@ -16,6 +16,7 @@ from services.exercise_engine import (
 from rate_limits import EXERCISE_GENERATE_PER_HOUR, HOUR, require_user_rate_limit
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
+REMOVED_EXERCISE_CATEGORIES = {"spelling", "punctuation", "style", "other"}
 
 
 def _public_exercise_content(exercise: models.Exercise) -> dict:
@@ -111,6 +112,11 @@ def generate_exercises(
         exercise_topic=request.topic,
         count=request.count,
     )
+    if not exercises:
+        raise HTTPException(
+            status_code=400,
+            detail="No supported exercise could be created for this focus",
+        )
 
     return [_exercise_response(e) for e in exercises]
 
@@ -166,6 +172,10 @@ def get_user_exercises(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     q = db.query(models.Exercise).filter(models.Exercise.user_id == current_user.id)
+    q = q.filter(
+        models.Exercise.exercise_type != "translation",
+        ~models.Exercise.error_category.in_(REMOVED_EXERCISE_CATEGORIES),
+    )
     if completed is not None:
         if completed:
             q = q.filter(models.Exercise.attempts.any())

@@ -186,7 +186,7 @@ export interface Exercise {
   id: number;
   user_id: string;
   error_category: string;
-  exercise_type: 'fill_blank' | 'correction' | 'multiple_choice' | 'translation' | 'vocabulary_cloze';
+  exercise_type: 'fill_blank' | 'correction' | 'multiple_choice' | 'vocabulary_cloze';
   title: string;
   instructions: string;
   content: ExerciseContent;
@@ -226,6 +226,12 @@ export interface ExerciseContent {
     hint?: string;
     focus?: string;
     error_type?: string;
+    verb?: string;
+    tense?: string;
+    person?: string;
+    word?: string;
+    case?: string;
+    answer_scope?: 'full_phrase' | 'article_only';
   }>;
   questions?: Array<{
     id: number;
@@ -477,4 +483,13 @@ export const ERROR_CATEGORY_LABELS: Record<string, string> = {
   punctuation: 'Punctuation',
   style: 'Style',
   other: 'Other',
+};
+
+export const EXERCISE_CATEGORY_LABELS: Record<string, string> = {
+  ...ERROR_CATEGORY_LABELS,
+  grammar: 'Other grammar',
+  case: 'Cases & declension',
+  gender: 'Noun gender',
+  verb_conjugation: 'Verbs & tenses',
+  tense: 'Verbs & tenses',
 };

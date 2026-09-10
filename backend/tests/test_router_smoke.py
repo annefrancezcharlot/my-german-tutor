@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -21,6 +22,7 @@ import auth
 import database
 import models
 import rate_limits
+import services.claude_service as claude_service
 import services.exercise_engine as exercise_engine
 from routers.chat import (
     _build_realtime_instructions,
@@ -290,6 +292,471 @@ def test_flashcard_cloze_rejects_count_larger_than_set(db_session, user):
             flashcard_set=flashcard_set,
             count=20,
         )
+
+
+def _guided_fill_payload(category: str):
+    sentences = []
+    for item_id in range(1, 6):
+        item = {
+            "id": item_id,
+            "text": f"Ihr ___ die Aufgabe {item_id}.",
+        }
+        if category == "case":
+            item.update({
+                "word": "die grosse Aufgabe",
+                "case": "Akkusativ",
+                "answer_scope": "full_phrase",
+            })
+        else:
+            item.update({
+                "verb": "lösen",
+                "tense": "Präsens",
+            })
+        sentences.append(item)
+    return {
+        "exercise_type": "fill_blank",
+        "title": "Große Übung",
+        "instructions": "Füllt die Lücken aus.",
+        "content": {"sentences": sentences},
+        "answer_key": {str(item_id): "löst" for item_id in range(1, 6)},
+    }
+
+
+@pytest.mark.parametrize("category", ["verb_conjugation", "tense", "case"])
+def test_guided_fill_validation_requires_metadata_and_enforces_swiss_spelling(category):
+    validated = claude_service._validate_standard_exercise(
+        _guided_fill_payload(category),
+        exercise_type="fill_blank",
+        error_category=category,
+    )
+
+    assert validated["title"] == "Grosse Übung"
+    assert validated["answer_key"]["1"] == ["löst"]
+
+
+def test_guided_verb_validation_rejects_missing_tense():
+    payload = _guided_fill_payload("verb_conjugation")
+    payload["content"]["sentences"][0].pop("tense")
+
+    with pytest.raises(ValueError, match="verb item 1 needs tense"):
+        claude_service._validate_standard_exercise(
+            payload,
+            exercise_type="fill_blank",
+            error_category="verb_conjugation",
+        )
+
+
+def test_guided_verb_validation_cleans_nonessential_metadata_and_aliases():
+    payload = _guided_fill_payload("verb_conjugation")
+    item = payload["content"]["sentences"][0]
+    item["infinitive"] = item.pop("verb")
+    item["target_tense"] = item.pop("tense")
+    item["person"] = "2. Person Plural"
+    item["hint"] = "ihr"
+
+    validated = claude_service._validate_standard_exercise(
+        payload,
+        exercise_type="fill_blank",
+        error_category="verb_conjugation",
+    )
+
+    cleaned = validated["content"]["sentences"][0]
+    assert cleaned["verb"] == "lösen"
+    assert cleaned["tense"] == "Präsens"
+    assert "person" not in cleaned
+    assert "hint" not in cleaned
+
+
+def test_compound_answer_check_is_limited_to_the_blank_clause():
+    payload = _guided_fill_payload("tense")
+    payload["content"]["sentences"][0].update({
+        "text": "Er hat gesagt, dass ihr die Aufgabe ___.",
+        "tense": "Perfekt",
+    })
+    payload["answer_key"]["1"] = ["habt gelöst"]
+
+    validated = claude_service._validate_standard_exercise(
+        payload,
+        exercise_type="fill_blank",
+        error_category="tense",
+    )
+
+    assert validated["answer_key"]["1"] == ["habt gelöst"]
+
+
+def test_guided_verb_validation_rejects_visible_part_of_compound_answer():
+    payload = _guided_fill_payload("tense")
+    payload["content"]["sentences"][0]["text"] = "Ihr habt die Aufgabe bereits gelöst ___."
+    payload["answer_key"]["1"] = ["habt gelöst"]
+
+    with pytest.raises(ValueError, match="already contains part of its complete answer"):
+        claude_service._validate_standard_exercise(
+            payload,
+            exercise_type="fill_blank",
+            error_category="tense",
+        )
+
+
+def test_guided_verb_validation_accepts_only_the_missing_compound_part():
+    payload = _guided_fill_payload("tense")
+    payload["content"]["sentences"][0].update({
+        "text": "Ihr habt die Aufgabe bereits ___.",
+        "tense": "Perfekt",
+    })
+    payload["answer_key"]["1"] = ["gelöst"]
+
+    validated = claude_service._validate_standard_exercise(
+        payload,
+        exercise_type="fill_blank",
+        error_category="tense",
+    )
+
+    assert validated["answer_key"]["1"] == ["gelöst"]
+
+
+@pytest.mark.parametrize(
+    "focus",
+    [
+        "Zustandspassiv vs. Vorgangspassiv",
+        "Zustands-Passiv",
+        "Vorgangspassiv im Präsens",
+        "state versus process passive",
+    ],
+)
+def test_passive_contrast_focus_is_routed_separately(focus):
+    assert exercise_engine._is_passive_contrast_focus(focus) is True
+
+
+def test_passive_contrast_prompt_does_not_expose_auxiliary_as_metadata():
+    prompt = claude_service._build_exercise_prompt(
+        error_category="tense",
+        subcategories=["Zustandspassiv und Vorgangspassiv"],
+        exercise_type="multiple_choice",
+        difficulty="B2",
+        example_errors=[],
+        exercise_variant="passive_contrast",
+    )
+
+    assert "past participle remains visible" in prompt
+    assert "do not show sein or werden as a hint" in prompt
+    assert "exactly one ___ for the finite auxiliary" in prompt
+
+
+def test_passive_contrast_generation_uses_multiple_choice(db_session, user, monkeypatch):
+    captured = {}
+
+    def fake_generate_exercise(**kwargs):
+        captured.update(kwargs)
+        return {
+            "exercise_type": "multiple_choice",
+            "title": "Passiv",
+            "instructions": "Wählt die passende Form.",
+            "content": {"questions": []},
+            "answer_key": {},
+        }
+
+    monkeypatch.setattr(exercise_engine, "generate_exercise", fake_generate_exercise)
+
+    created = exercise_engine.create_exercises_for_user(
+        db=db_session,
+        user_id=user.id,
+        user_level="B2",
+        focus_categories=["tense"],
+        exercise_topic="Zustandspassiv versus Vorgangspassiv",
+        count=1,
+    )
+
+    assert len(created) == 1
+    assert captured["exercise_type"] == "multiple_choice"
+    assert captured["exercise_variant"] == "passive_contrast"
+    assert captured["context_inspiration"]
+
+
+def test_exercise_contexts_include_personal_conversation_topics(db_session, user):
+    db_session.add_all([
+        models.ConversationSession(
+            user_id=user.id,
+            topic="Wohnungssuche in Zürich",
+            topic_category="Daily life",
+        ),
+        models.ConversationSession(
+            user_id=user.id,
+            topic="Ein Vorstellungsgespräch",
+            topic_category="Work",
+        ),
+    ])
+    db_session.commit()
+
+    topics = exercise_engine.get_exercise_context_topics(db_session, user.id, limit=5)
+
+    assert "Wohnungssuche in Zürich" in topics
+    assert "Ein Vorstellungsgespräch" in topics
+    assert len(topics) == 5
+
+
+def test_exercise_prompt_uses_context_and_recent_sentences():
+    prompt = claude_service._build_exercise_prompt(
+        error_category="verb_conjugation",
+        subcategories=["Konjunktiv II"],
+        exercise_type="fill_blank",
+        difficulty="B2",
+        example_errors=[],
+        context_inspiration="Wohnungssuche in Zürich",
+        avoid_sentences=["Ich löse die Aufgabe."],
+    )
+
+    assert "Wohnungssuche in Zürich" in prompt
+    assert "Do not repeat or closely paraphrase" in prompt
+    assert "Ich löse die Aufgabe." in prompt
+    assert "Vary people, actions, vocabulary" in prompt
+
+
+def test_generated_exercise_gets_separate_grammar_review(monkeypatch):
+    generated = _guided_fill_payload("verb_conjugation")
+    generated["content"]["sentences"][0].update({
+        "text": "An deiner Stelle ___ ich früher nach Hause gegangen.",
+        "verb": "werden",
+        "tense": "Konjunktiv II Präsens",
+    })
+    generated["answer_key"]["1"] = ["würde"]
+    reviewed = json.loads(json.dumps(generated))
+    reviewed["content"]["sentences"][0].update({
+        "verb": "gehen",
+        "tense": "Konjunktiv II Vergangenheit",
+    })
+    reviewed["answer_key"]["1"] = ["wäre"]
+
+    calls = []
+    responses = iter((generated, reviewed))
+
+    def fake_create(**kwargs):
+        calls.append(kwargs)
+        payload = next(responses)
+        return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))])
+
+    monkeypatch.setattr(claude_service.client.messages, "create", fake_create)
+
+    result = claude_service.generate_exercise(
+        error_category="verb_conjugation",
+        subcategories=["Konjunktiv II"],
+        exercise_type="fill_blank",
+        difficulty="B2",
+        example_errors=[],
+    )
+
+    assert len(calls) == 2
+    assert calls[1]["system"] == claude_service.EXERCISE_REVIEW_SYSTEM_PROMPT
+    assert "würde requires an infinitive" in calls[1]["messages"][0]["content"]
+    assert result["answer_key"]["1"] == ["wäre"]
+    assert result["content"]["sentences"][0]["verb"] == "gehen"
+
+
+def test_reduced_exercise_mapping():
+    assert exercise_engine.CATEGORY_EXERCISE_MAP["case"] == ["fill_blank"]
+    assert exercise_engine.CATEGORY_EXERCISE_MAP["verb_conjugation"] == ["fill_blank"]
+    assert exercise_engine.CATEGORY_EXERCISE_MAP["tense"] == ["fill_blank"]
+    assert exercise_engine.CATEGORY_EXERCISE_MAP["preposition"] == ["multiple_choice"]
+    assert exercise_engine.CATEGORY_EXERCISE_MAP["word_order"] == ["correction"]
+    for removed in ("spelling", "punctuation", "style", "other"):
+        assert removed not in exercise_engine.CATEGORY_EXERCISE_MAP
+    assert "translation" not in exercise_engine.EXERCISE_TYPES
+
+
+def test_distinct_categories_group_tense_with_verb_conjugation():
+    selected = exercise_engine._distinct_category_items(
+        [
+            {"category": "verb_conjugation", "count": 5},
+            {"category": "tense", "count": 4},
+            {"category": "case", "count": 3},
+            {"category": "preposition", "count": 2},
+        ],
+        limit=3,
+    )
+
+    assert [item["category"] for item in selected] == [
+        "verb_conjugation",
+        "case",
+        "preposition",
+    ]
+
+
+def test_automatic_generation_uses_three_distinct_categories(db_session, user, monkeypatch):
+    generated_categories = []
+    monkeypatch.setattr(
+        exercise_engine,
+        "get_weak_categories",
+        lambda *args, **kwargs: [
+            {"category": "verb_conjugation", "count": 5},
+            {"category": "tense", "count": 4},
+            {"category": "case", "count": 3},
+            {"category": "preposition", "count": 2},
+        ],
+    )
+    monkeypatch.setattr(exercise_engine, "get_subcategories", lambda *args, **kwargs: [])
+    monkeypatch.setattr(exercise_engine, "get_example_errors", lambda *args, **kwargs: [])
+
+    def fake_generate_exercise(**kwargs):
+        generated_categories.append(kwargs["error_category"])
+        return {
+            "exercise_type": kwargs["exercise_type"],
+            "title": "Übung im Kontext",
+            "instructions": "Bearbeitet die Aufgaben.",
+            "content": {},
+            "answer_key": {},
+        }
+
+    monkeypatch.setattr(exercise_engine, "generate_exercise", fake_generate_exercise)
+
+    created = exercise_engine.create_exercises_for_user(
+        db=db_session,
+        user_id=user.id,
+        user_level="B2",
+        count=3,
+    )
+
+    assert len(created) == 3
+    assert generated_categories == ["verb_conjugation", "case", "preposition"]
+
+
+def test_generation_creates_one_exercise_per_selected_category(db_session, user, monkeypatch):
+    generated_categories = []
+    monkeypatch.setattr(exercise_engine, "get_subcategories", lambda *args, **kwargs: [])
+    monkeypatch.setattr(exercise_engine, "get_example_errors", lambda *args, **kwargs: [])
+
+    def fake_generate_exercise(**kwargs):
+        generated_categories.append(kwargs["error_category"])
+        return {
+            "exercise_type": kwargs["exercise_type"],
+            "title": "Übung im Kontext",
+            "instructions": "Bearbeitet die Aufgaben.",
+            "content": {},
+            "answer_key": {},
+        }
+
+    monkeypatch.setattr(exercise_engine, "generate_exercise", fake_generate_exercise)
+
+    created = exercise_engine.create_exercises_for_user(
+        db=db_session,
+        user_id=user.id,
+        user_level="B2",
+        focus_categories=["case", "preposition"],
+        count=10,
+    )
+
+    assert len(created) == 2
+    assert generated_categories == ["case", "preposition"]
+
+
+def test_multiple_choice_validation_requires_four_labelled_options():
+    questions = [
+        {
+            "id": item_id,
+            "question": f"Ich warte ___ den Bus {item_id}.",
+            "options": ["A) auf", "B) an", "C) mit", "D) von"],
+        }
+        for item_id in range(1, 6)
+    ]
+    payload = {
+        "exercise_type": "multiple_choice",
+        "title": "Präpositionen",
+        "instructions": "Wählt die passende Präposition.",
+        "content": {"questions": questions},
+        "answer_key": {str(item_id): "A" for item_id in range(1, 6)},
+    }
+
+    validated = claude_service._validate_standard_exercise(
+        payload,
+        exercise_type="multiple_choice",
+        error_category="preposition",
+    )
+    assert validated["answer_key"]["1"] == "A"
+
+    revealing_title = json.loads(json.dumps(payload))
+    revealing_title["title"] = "Die Präposition auf"
+    with pytest.raises(ValueError, match="title must not reveal a declared answer"):
+        claude_service._validate_standard_exercise(
+            revealing_title,
+            exercise_type="multiple_choice",
+            error_category="preposition",
+        )
+
+    payload["content"]["questions"][0]["options"][3] = "E) bei"
+    with pytest.raises(ValueError, match="labelled A through D"):
+        claude_service._validate_standard_exercise(
+            payload,
+            exercise_type="multiple_choice",
+            error_category="preposition",
+        )
+
+    payload["content"]["questions"][0]["options"] = ["A) auf", "B) auf", "C) mit", "D) von"]
+    with pytest.raises(ValueError, match="options must be unique"):
+        claude_service._validate_standard_exercise(
+            payload,
+            exercise_type="multiple_choice",
+            error_category="preposition",
+        )
+
+
+def test_fill_title_must_not_reveal_the_answer():
+    payload = _guided_fill_payload("verb_conjugation")
+    payload["title"] = "Setzt löst ein"
+
+    with pytest.raises(ValueError, match="title must not reveal a declared answer"):
+        claude_service._validate_standard_exercise(
+            payload,
+            exercise_type="fill_blank",
+            error_category="verb_conjugation",
+        )
+
+
+def test_exercise_list_hides_removed_historical_formats(db_session, user):
+    from routers.exercises import get_user_exercises
+
+    exercises = [
+        models.Exercise(
+            user_id=user.id,
+            error_category=category,
+            exercise_type=exercise_type,
+            title=f"{category} exercise",
+            instructions="Instructions",
+            content={"sentences": []},
+            answer_key={},
+            difficulty="B2",
+        )
+        for category, exercise_type in [
+            ("case", "fill_blank"),
+            ("spelling", "correction"),
+            ("punctuation", "correction"),
+            ("style", "correction"),
+            ("grammar", "translation"),
+        ]
+    ]
+    db_session.add_all(exercises)
+    db_session.commit()
+
+    visible = get_user_exercises(
+        db=db_session,
+        current_user=_current_user(user.id),
+    )
+
+    assert len(visible) == 1
+    assert visible[0].error_category == "case"
+    assert visible[0].exercise_type == "fill_blank"
+
+
+def test_correction_scoring_accepts_declared_variants():
+    exercise = SimpleNamespace(
+        exercise_type="correction",
+        answer_key={"1": ["Heute gehe ich nach Hause.", "Ich gehe heute nach Hause."]},
+        content={},
+    )
+
+    result = exercise_engine.score_exercise(
+        exercise,
+        {"1": "Ich gehe heute nach Hause"},
+    )
+
+    assert result["score"] == 100
 
 
 @pytest.mark.parametrize(
