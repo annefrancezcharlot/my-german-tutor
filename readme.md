@@ -1,5 +1,7 @@
 # My German Tutor
 
+⚠️ Work in Progress: This project is under active development. APIs and features may change without notice.
+
 After reaching an intermediate level in German, I found myself making the same mistakes over and over again. Those mistakes don't get corrected when you speak to people in your every day life, and they tend to stick. That's why I built My German Tutor, a pocket tutor that remembers your mistakes and helps you work on them.
 
 ## Features
