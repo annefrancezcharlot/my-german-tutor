@@ -110,7 +110,11 @@ Return ONLY valid JSON:
 }}]}}
 Return every numeric message_id exactly once. Use empty arrays when there is nothing to report.
 Each original must occur exactly once; include context to disambiguate repeated words.
-Corrections must not overlap: combine interacting edits. Suggestions must not overlap corrections.
+Return one correction per independent error, with its own specific rule and explanation.
+Use the smallest phrase needed to show the error and its replacement; do not include unchanged sentences.
+Never bundle unrelated errors into a full-message correction or a numbered list of explanations.
+Corrections must not overlap: combine only interacting edits within the smallest shared phrase,
+keeping all other errors separate. Suggestions must not overlap corrections.
 Do not return a full rewritten sentence: the application constructs it from corrections.
 Check that explanations agree with replacements and grammatical rules, and that optional wording
 or valid constructions have not been treated as errors.
@@ -828,7 +832,10 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
                     continue
                 if (start, end, after) in spans:
                     continue  # The same edit was reported under two grammar rules.
-                raise ValueError("Corrections overlap; combine all corrections into one full-message edit")
+                raise ValueError(
+                    "Corrections overlap; combine only the overlapping edits into the smallest "
+                    "shared phrase and keep independent errors in separate corrections"
+                )
             if optional:
                 suggestions.append({k: entry[k] for k in ("original", "corrected", "explanation")})
             else:
@@ -880,10 +887,12 @@ def analyze_message_batch(messages: List[Dict[str, Any]], level: str = "C1") -> 
                 raise ValueError("Invalid correction analysis after retry") from exc
             prompt += (
                 f"\nPrevious analysis failed validation: {exc}. Regenerate the complete batch."
-                " For each message with errors, return exactly ONE correction whose original is"
-                " the entire original message and whose corrected is the entire minimally corrected"
-                " message. Explain all necessary changes together. Return suggestions as an empty"
-                " array on this retry. Preserve the ignored capitalization, typo and ss/ß rules."
+                " Keep one correction per independent error, each with its own phrase replacement"
+                " and explanation. Resolve overlapping edits using only the smallest shared phrase;"
+                " keep unrelated corrections separate. Each original must be an exact unique"
+                " substring, with only enough context to disambiguate it. Do not replace the entire"
+                " message or combine explanations into a numbered list. Return suggestions as an"
+                " empty array on this retry. Preserve the ignored capitalization, typo and ss/ß rules."
             )
     raise AssertionError("Unreachable")
 

@@ -174,6 +174,7 @@ export const HomePage: React.FC<Props> = ({ onLogin }) => {
             )}
             <input
               type="email"
+              autoComplete="username"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="Email"
@@ -182,6 +183,7 @@ export const HomePage: React.FC<Props> = ({ onLogin }) => {
             />
             <input
               type="password"
+              autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Password"

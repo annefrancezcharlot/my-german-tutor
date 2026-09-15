@@ -56,8 +56,9 @@ export default function App() {
         const refreshed = await refreshAuthSession(refreshToken);
         storeSession(refreshed);
         return refreshed.access_token;
-      } catch (err) {
-        console.error('Failed to refresh auth session', err);
+      } catch {
+        // Auth request errors can contain credentials or tokens in their config.
+        console.error('Failed to refresh auth session');
         clearStoredSession();
         setUser(null);
         return null;
@@ -79,8 +80,8 @@ export default function App() {
 
       try {
         await loadBackendProfile();
-      } catch (err) {
-        console.error('Failed to load authenticated user', err);
+      } catch {
+        console.error('Failed to load authenticated user');
         clearStoredSession();
         setUser(null);
       } finally {
@@ -117,7 +118,7 @@ export default function App() {
       const backendProfile = result.profile ?? await createAuthProfile();
       setUser(backendProfile);
     } catch (err) {
-      console.error('Login failed', err);
+      console.error('Login failed');
       throw err;
     }
   };

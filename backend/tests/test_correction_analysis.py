@@ -98,19 +98,33 @@ def test_duplicate_edit_is_counted_once():
     assert len(result['corrections']) == 1
 
 
-def test_conflicting_corrections_retry_as_one_edit(monkeypatch):
+def test_conflicting_corrections_retry_keeps_independent_errors_separate(monkeypatch):
+    original = 'Ich habe ein Hund. Ich spreche mit meine Nachbarn.'
+    corrections = [
+        edit('ein Hund', 'einen Hund', 'case'),
+        edit('mit meine Nachbarn', 'mit meinen Nachbarn', 'preposition'),
+    ]
+    corrections[0]['explanation'] = 'Haben takes an accusative object.'
+    corrections[1]['explanation'] = 'Mit takes the dative case.'
     responses = [
-        {'messages': [{'message_id': 1, 'corrections': [edit('ein Hund', 'einen Hund'), edit('Hund', 'Hund!')]}]},
-        {'messages': [{'message_id': 1, 'corrections': [edit('Ich habe ein Hund.', 'Ich habe einen Hund.')]}]},
+        {'messages': [{'message_id': 1, 'corrections': [*corrections, edit('Hund', 'Hund!')]}]},
+        {'messages': [{'message_id': 1, 'corrections': corrections}]},
     ]
     calls = []
     def create(**kwargs):
         calls.append(kwargs)
         return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(responses.pop(0)))])
     monkeypatch.setattr(service.client.messages, 'create', create)
-    result = service.analyze_message_batch([{'message_id': 1, 'content': 'Ich habe ein Hund.'}])
-    assert result[0]['corrected_user_message'] == 'Ich habe einen Hund.'
-    assert 'exactly ONE correction' in calls[1]['messages'][0]['content']
+    result = service.analyze_message_batch([{'message_id': 1, 'content': original}])
+    assert result[0]['corrected_user_message'] == 'Ich habe einen Hund. Ich spreche mit meinen Nachbarn.'
+    assert result[0]['corrections'] == corrections
+    assert len(calls) == 2
+    for call in calls:
+        prompt = call['messages'][0]['content']
+        assert 'one correction per independent error' in prompt
+        assert 'exactly ONE correction' not in prompt
+        assert 'one full-message edit' not in prompt
+    assert 'smallest shared phrase' in calls[1]['messages'][0]['content']
 
 
 def test_summary_retries_missing_level(monkeypatch):
