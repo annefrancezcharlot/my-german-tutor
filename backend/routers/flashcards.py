@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pathlib import Path
@@ -13,7 +14,7 @@ import unicodedata
 import models
 from auth import CurrentUser, get_current_user
 from database import get_db
-from services.claude_service import generate_flashcard_set
+from services.claude_service import FlashcardGenerationTruncatedError, generate_flashcard_set
 from rate_limits import FLASHCARD_GENERATE_PER_HOUR, HOUR, require_user_rate_limit
 
 router = APIRouter(prefix="/flashcards", tags=["flashcards"])
@@ -156,6 +157,11 @@ def _load_json_set(path: Path) -> Dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
+    except FlashcardGenerationTruncatedError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Claude reached the output limit before completing the flashcard set",
+        ) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=500,
@@ -303,7 +309,7 @@ def _normalize_generated_flashcard_set(
             continue
 
         tags = card.get("tags")
-        normalized_cards.append({
+        normalized_card = {
             "id": _unique_card_id(front, used_card_ids, index),
             "front": front.strip(),
             "back": back.strip(),
@@ -315,7 +321,11 @@ def _normalize_generated_flashcard_set(
                 for tag in tags
                 if isinstance(tag, str) and tag.strip()
             ][:8] if isinstance(tags, list) else [],
-        })
+        }
+        source_id = card.get("source_id")
+        if isinstance(source_id, str) and source_id.strip():
+            normalized_card["source_id"] = source_id.strip()
+        normalized_cards.append(normalized_card)
 
     if not normalized_cards:
         raise HTTPException(status_code=502, detail="Generated flashcards did not contain usable cards")
@@ -331,6 +341,45 @@ def _normalize_generated_flashcard_set(
         "description": description.strip() if isinstance(description, str) else "",
         "cards": normalized_cards,
     }
+
+
+def _validate_and_order_supplied_term_cards(
+    cards: List[Dict[str, Any]],
+    supplied_terms: List[str],
+) -> List[Dict[str, Any]]:
+    expected = {
+        f"term_{index:03d}": term
+        for index, term in enumerate(supplied_terms, start=1)
+    }
+    returned_ids = [card.get("source_id") for card in cards]
+    id_counts = Counter(source_id for source_id in returned_ids if isinstance(source_id, str))
+
+    missing_ids = [source_id for source_id in expected if id_counts[source_id] == 0]
+    duplicate_ids = [source_id for source_id in expected if id_counts[source_id] > 1]
+    unexpected_ids = sorted(source_id for source_id in id_counts if source_id not in expected)
+    missing_id_count = sum(not isinstance(source_id, str) for source_id in returned_ids)
+
+    if missing_ids or duplicate_ids or unexpected_ids or missing_id_count:
+        problems = []
+        if missing_ids:
+            problems.append(
+                "missing: " + ", ".join(expected[source_id] for source_id in missing_ids)
+            )
+        if duplicate_ids:
+            problems.append(
+                "duplicated: " + ", ".join(expected[source_id] for source_id in duplicate_ids)
+            )
+        if unexpected_ids:
+            problems.append("unexpected IDs: " + ", ".join(unexpected_ids))
+        if missing_id_count:
+            problems.append(f"cards without a source ID: {missing_id_count}")
+        raise HTTPException(
+            status_code=502,
+            detail="Claude did not return each supplied term exactly once (" + "; ".join(problems) + ")",
+        )
+
+    cards_by_id = {card["source_id"]: card for card in cards}
+    return [cards_by_id[source_id] for source_id in expected]
 
 
 def _find_set(
@@ -615,6 +664,11 @@ def generate_flashcard_set_file(
             translation_language=request.translation_language,
             supplied_terms=supplied_terms or None,
         )
+    except FlashcardGenerationTruncatedError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Claude reached the output limit before completing the flashcard set",
+        ) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=502, detail="The LLM returned invalid flashcard JSON") from exc
     except Exception as exc:
@@ -626,11 +680,8 @@ def generate_flashcard_set_file(
         requested_topic=topic,
         requested_level=user.level,
     )
-    if supplied_terms and len(item["cards"]) != len(supplied_terms):
-        raise HTTPException(
-            status_code=502,
-            detail="Flashcard generation did not return one card for every supplied term",
-        )
+    if supplied_terms:
+        item["cards"] = _validate_and_order_supplied_term_cards(item["cards"], supplied_terms)
 
     db_set = models.FlashcardSet(
         id=item["id"],
@@ -748,11 +799,10 @@ def extend_flashcard_set(
         requested_topic=item.topic,
         requested_level=item.level,
     )
-    if len(generated_item["cards"]) != len(request.terms):
-        raise HTTPException(
-            status_code=502,
-            detail="Flashcard generation did not return one card for every supplied term",
-        )
+    generated_item["cards"] = _validate_and_order_supplied_term_cards(
+        generated_item["cards"],
+        request.terms,
+    )
 
     seen_fronts = {card.front.strip().casefold() for card in item.cards}
     new_cards = []

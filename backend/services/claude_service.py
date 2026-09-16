@@ -18,6 +18,11 @@ MODEL = "claude-sonnet-4-6"
 CEFR_LEVELS = {"A1", "A2", "B1", "B2", "C1", "C2"}
 logger = logging.getLogger(__name__)
 
+
+class FlashcardGenerationTruncatedError(RuntimeError):
+    """Claude stopped before completing the flashcard JSON response."""
+
+
 # ── System prompts ──────────────────────────────────────────────────────────
 
 def _build_conversation_system_prompt(topic: str, level: str) -> str:
@@ -374,19 +379,27 @@ def _build_flashcard_prompt(
 ) -> str:
     language_name = "French" if translation_language == "fr" else "English"
     supplied_terms_block = ""
+    source_id_field = ""
     generation_rule = (
         f"- Generate exactly {count} cards.\n"
         "- Prefer useful B1-C1 vocabulary, chunks, collocations, and fixed preposition patterns."
     )
     if supplied_terms:
+        supplied_items = [
+            {"source_id": f"term_{index:03d}", "source_term": term}
+            for index, term in enumerate(supplied_terms, start=1)
+        ]
         supplied_terms_block = (
             "\nLearner-supplied German words and expressions:\n"
-            f"{json.dumps(supplied_terms, ensure_ascii=False)}\n"
+            f"{json.dumps(supplied_items, ensure_ascii=False)}\n"
         )
+        source_id_field = '\n      "source_id": "<copy the supplied source_id exactly>",'
         generation_rule = (
             f"- Create exactly one card for each of the {count} supplied terms, in the same order.\n"
+            "- Copy each supplied source_id unchanged into its card. Return every source_id exactly once.\n"
             "- Do not omit terms, merge terms, or introduce unrelated vocabulary.\n"
-            "- Correct obvious spelling, and add the correct article to nouns or reflexive pronoun to reflexive verbs."
+            "- The front may differ from source_term: correct obvious spelling, use a useful canonical form, "
+            "and add the correct article to nouns or reflexive pronoun to reflexive verbs."
         )
 
     return f"""You are an expert German vocabulary tutor.
@@ -405,7 +418,7 @@ Return ONLY valid JSON in this exact format:
   "title": "<short useful title>",
   "description": "<one sentence describing what the learner will practice>",
   "cards": [
-    {{
+    {{{source_id_field}
       "front": "<German word, chunk, collocation, or short phrase>",
       "back": "<concise {language_name} meaning>",
       "example": "<natural German example sentence>",
@@ -1106,6 +1119,22 @@ def generate_flashcard_set(
         max_tokens=max(1800, min(6000, count * 450)),
         messages=[{"role": "user", "content": prompt}],
     )
+    usage = getattr(response, "usage", None)
+    stop_reason = getattr(response, "stop_reason", None)
+    logger.info(
+        "claude.flashcards.response message_id=%s stop_reason=%s input_tokens=%s "
+        "output_tokens=%s requested_count=%s supplied_terms=%s",
+        getattr(response, "id", None),
+        stop_reason,
+        getattr(usage, "input_tokens", None),
+        getattr(usage, "output_tokens", None),
+        count,
+        bool(supplied_terms),
+    )
+    if stop_reason == "max_tokens":
+        raise FlashcardGenerationTruncatedError(
+            "Claude reached the output-token limit before completing the flashcard set"
+        )
     raw_text = response.content[0].text.strip()
 
     try:
@@ -1123,7 +1152,8 @@ def generate_flashcard_set(
         cards = []
 
     normalized_cards = []
-    for card in cards[:count]:
+    cards_to_normalize = cards if supplied_terms else cards[:count]
+    for card in cards_to_normalize:
         if not isinstance(card, dict):
             continue
         front = card.get("front")
@@ -1136,14 +1166,18 @@ def generate_flashcard_set(
         case_examples = card.get("case_examples")
         tense_examples = card.get("tense_examples")
         tags = card.get("tags")
-        normalized_cards.append({
+        normalized_card = {
             "front": front.strip(),
             "back": back.strip(),
             "example": card.get("example").strip() if isinstance(card.get("example"), str) else "",
             "case_examples": case_examples if isinstance(case_examples, dict) else {},
             "tense_examples": tense_examples if isinstance(tense_examples, dict) else {},
             "tags": [tag.strip() for tag in tags if isinstance(tag, str) and tag.strip()][:8] if isinstance(tags, list) else [],
-        })
+        }
+        source_id = card.get("source_id")
+        if isinstance(source_id, str) and source_id.strip():
+            normalized_card["source_id"] = source_id.strip()
+        normalized_cards.append(normalized_card)
 
     return {
         "topic": data.get("topic").strip() if isinstance(data.get("topic"), str) and data.get("topic").strip() else topic,

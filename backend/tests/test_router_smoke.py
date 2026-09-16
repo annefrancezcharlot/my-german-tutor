@@ -29,6 +29,7 @@ from routers.chat import (
     _build_realtime_transcription,
     _build_realtime_turn_detection,
 )
+from routers.flashcards import _validate_and_order_supplied_term_cards
 from main import app
 
 
@@ -1227,8 +1228,8 @@ def test_flashcards_generate_from_supplied_terms_with_french_backs(client, user,
             "title": "Meine Wörter",
             "description": "Vom Lernenden ausgewählte Wörter",
             "cards": [
-                {"front": "die Wohnung", "back": "l'appartement", "tags": ["noun"]},
-                {"front": "sich erinnern an", "back": "se souvenir de", "tags": ["verb"]},
+                {"source_id": "term_001", "front": "die Wohnung", "back": "l'appartement", "tags": ["noun"]},
+                {"source_id": "term_002", "front": "sich erinnern an", "back": "se souvenir de", "tags": ["verb"]},
             ],
         }
 
@@ -1255,6 +1256,65 @@ def test_flashcards_generate_from_supplied_terms_with_french_backs(client, user,
     assert saved.json()["cards"][0]["tags"] == ["noun"]
 
 
+def test_flashcard_source_ids_track_normalized_terms_and_restore_order():
+    prompt = claude_service._build_flashcard_prompt(
+        "Meine Wörter",
+        "Meine Wörter",
+        "B2",
+        2,
+        supplied_terms=["Eierstöcke", "errinern"],
+    )
+    assert '"source_id": "term_001", "source_term": "Eierstöcke"' in prompt
+    assert '"source_id": "term_002", "source_term": "errinern"' in prompt
+
+    ordered = _validate_and_order_supplied_term_cards(
+        [
+            {"source_id": "term_002", "front": "sich erinnern an"},
+            {"source_id": "term_001", "front": "der Eierstock"},
+        ],
+        ["Eierstöcke", "errinern"],
+    )
+    assert [card["front"] for card in ordered] == ["der Eierstock", "sich erinnern an"]
+
+    with pytest.raises(Exception) as exc_info:
+        _validate_and_order_supplied_term_cards(
+            [
+                {"source_id": "term_001", "front": "der Eierstock"},
+                {"source_id": "term_001", "front": "das Ei"},
+            ],
+            ["Eierstöcke", "errinern"],
+        )
+    assert "missing: errinern" in exc_info.value.detail
+    assert "duplicated: Eierstöcke" in exc_info.value.detail
+
+
+def test_flashcard_generation_reports_truncated_claude_response(monkeypatch, caplog):
+    response = SimpleNamespace(
+        id="msg_truncated_test",
+        stop_reason="max_tokens",
+        usage=SimpleNamespace(input_tokens=250, output_tokens=6000),
+        content=[SimpleNamespace(type="text", text='{"cards": [')],
+    )
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: response)),
+    )
+
+    with caplog.at_level("INFO"), pytest.raises(
+        claude_service.FlashcardGenerationTruncatedError
+    ):
+        claude_service.generate_flashcard_set(
+            topic="Meine Wörter",
+            count=1,
+            supplied_terms=["Eierstöcke"],
+        )
+
+    assert "message_id=msg_truncated_test" in caplog.text
+    assert "stop_reason=max_tokens" in caplog.text
+    assert "output_tokens=6000" in caplog.text
+
+
 def test_personal_flashcard_set_management(client, db_session, user, monkeypatch):
     def fake_generation(**kwargs):
         terms = kwargs.get("supplied_terms") or [kwargs["topic"]]
@@ -1264,12 +1324,13 @@ def test_personal_flashcard_set_management(client, db_session, user, monkeypatch
             "description": "Generated cards",
             "cards": [
                 {
+                    **({"source_id": f"term_{index:03d}"} if kwargs.get("supplied_terms") else {}),
                     "front": f"die {term}",
                     "back": f"the {term}",
                     "example": f"Das ist die {term}.",
                     "tags": ["noun"],
                 }
-                for term in terms
+                for index, term in enumerate(terms, start=1)
             ],
         }
 
