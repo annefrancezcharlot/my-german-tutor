@@ -16,11 +16,27 @@ load_dotenv(env_path)
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 MODEL = "claude-sonnet-4-6"
 CEFR_LEVELS = {"A1", "A2", "B1", "B2", "C1", "C2"}
+FLASHCARD_BATCH_SIZE = 8
+FLASHCARD_MAX_OUTPUT_TOKENS = 16000
+FLASHCARD_REQUEST_TIMEOUT_SECONDS = 120
 logger = logging.getLogger(__name__)
 
 
 class FlashcardGenerationTruncatedError(RuntimeError):
     """Claude stopped before completing the flashcard JSON response."""
+
+
+class FlashcardGenerationEmptyResponseError(RuntimeError):
+    """Claude returned no text that can be parsed as flashcard JSON."""
+
+
+class FlashcardProviderError(RuntimeError):
+    """Claude could not complete the API request."""
+
+    def __init__(self, public_detail: str, http_status: int = 502):
+        super().__init__(public_detail)
+        self.public_detail = public_detail
+        self.http_status = http_status
 
 
 # ── System prompts ──────────────────────────────────────────────────────────
@@ -376,10 +392,11 @@ def _build_flashcard_prompt(
     count: int,
     translation_language: str = "en",
     supplied_terms: Optional[List[str]] = None,
+    source_id_start: int = 1,
 ) -> str:
     language_name = "French" if translation_language == "fr" else "English"
     supplied_terms_block = ""
-    source_id_field = ""
+    expected_source_ids: List[str] = []
     generation_rule = (
         f"- Generate exactly {count} cards.\n"
         "- Prefer useful B1-C1 vocabulary, chunks, collocations, and fixed preposition patterns."
@@ -387,20 +404,39 @@ def _build_flashcard_prompt(
     if supplied_terms:
         supplied_items = [
             {"source_id": f"term_{index:03d}", "source_term": term}
-            for index, term in enumerate(supplied_terms, start=1)
+            for index, term in enumerate(supplied_terms, start=source_id_start)
         ]
+        expected_source_ids = [item["source_id"] for item in supplied_items]
         supplied_terms_block = (
             "\nLearner-supplied German words and expressions:\n"
             f"{json.dumps(supplied_items, ensure_ascii=False)}\n"
         )
-        source_id_field = '\n      "source_id": "<copy the supplied source_id exactly>",'
         generation_rule = (
-            f"- Create exactly one card for each of the {count} supplied terms, in the same order.\n"
-            "- Copy each supplied source_id unchanged into its card. Return every source_id exactly once.\n"
+            f"- Create exactly one card for each of the {count} supplied terms.\n"
+            "- In the cards object, use each supplied source_id as a key exactly once.\n"
             "- Do not omit terms, merge terms, or introduce unrelated vocabulary.\n"
             "- The front may differ from source_term: correct obvious spelling, use a useful canonical form, "
             "and add the correct article to nouns or reflexive pronoun to reflexive verbs."
         )
+
+    example_card = {
+        "front": "<German word, chunk, collocation, or short phrase>",
+        "back": f"<concise {language_name} meaning>",
+        "example": "<natural German example sentence>",
+        "case_examples": [
+            {"label": "<case or grammar label>", "text": "<German sentence or pattern>"},
+        ],
+        "tense_examples": [
+            {"label": "<tense label>", "text": "<German sentence>"},
+        ],
+        "tags": ["<part of speech or topic tag>"],
+    }
+    example_cards = (
+        {expected_source_ids[0]: example_card}
+        if expected_source_ids
+        else [example_card]
+    )
+    example_cards_json = json.dumps(example_cards, ensure_ascii=False, indent=2)
 
     return f"""You are an expert German vocabulary tutor.
 Create a flashcard set for a learner at CEFR level {level}.
@@ -417,20 +453,7 @@ Return ONLY valid JSON in this exact format:
   "level": "{level}",
   "title": "<short useful title>",
   "description": "<one sentence describing what the learner will practice>",
-  "cards": [
-    {{{source_id_field}
-      "front": "<German word, chunk, collocation, or short phrase>",
-      "back": "<concise {language_name} meaning>",
-      "example": "<natural German example sentence>",
-      "case_examples": {{
-        "<case or grammar label>": "<German sentence or pattern>"
-      }},
-      "tense_examples": {{
-        "<tense label>": "<German sentence>"
-      }},
-      "tags": ["<part of speech or topic tag>"]
-    }}
-  ]
+  "cards": {example_cards_json}
 }}
 
 Rules:
@@ -443,6 +466,68 @@ Rules:
 - Keep examples natural and relevant to the topic.
 - Use Swiss-compatible German orthography: ss is acceptable; do not require ß.
 - Do not include markdown, comments, or text outside the JSON."""
+
+
+def _flashcard_output_schema(source_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    labeled_example = {
+        "type": "object",
+        "properties": {
+            "label": {"type": "string"},
+            "text": {"type": "string"},
+        },
+        "required": ["label", "text"],
+        "additionalProperties": False,
+    }
+    card_properties: Dict[str, Any] = {
+        "front": {"type": "string"},
+        "back": {"type": "string"},
+        "example": {"type": "string"},
+        "case_examples": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/labeled_example"},
+        },
+        "tense_examples": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/labeled_example"},
+        },
+        "tags": {"type": "array", "items": {"type": "string"}},
+    }
+    card_schema = {
+        "type": "object",
+        "properties": card_properties,
+        "required": list(card_properties),
+        "additionalProperties": False,
+    }
+    cards_schema = (
+        {
+            "type": "object",
+            "properties": {
+                source_id: {"$ref": "#/$defs/card"}
+                for source_id in source_ids
+            },
+            "required": source_ids,
+            "additionalProperties": False,
+        }
+        if source_ids
+        else {"type": "array", "items": {"$ref": "#/$defs/card"}}
+    )
+
+    return {
+        "type": "object",
+        "properties": {
+            "topic": {"type": "string"},
+            "level": {"type": "string"},
+            "title": {"type": "string"},
+            "description": {"type": "string"},
+            "cards": cards_schema,
+        },
+        "required": ["topic", "level", "title", "description", "cards"],
+        "additionalProperties": False,
+        "$defs": {
+            "card": card_schema,
+            "labeled_example": labeled_example,
+        },
+    }
 
 
 def _build_style_rewrite_prompt(
@@ -652,6 +737,27 @@ def _load_jsonish_object(raw_text: str) -> Dict[str, Any]:
         return json.loads(sanitized)
 
 
+def _labeled_examples_to_dict(value: Any) -> Dict[str, str]:
+    if isinstance(value, dict):
+        return {
+            str(label).strip(): str(text).strip()
+            for label, text in value.items()
+            if str(label).strip() and str(text).strip()
+        }
+    if not isinstance(value, list):
+        return {}
+
+    examples: Dict[str, str] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        text = item.get("text")
+        if isinstance(label, str) and label.strip() and isinstance(text, str) and text.strip():
+            examples[label.strip()] = text.strip()
+    return examples
+
+
 def _normalize_corrections(data: Dict[str, Any]) -> Dict[str, Any]:
     corrections = data.get("corrections")
     if not isinstance(corrections, list):
@@ -805,11 +911,23 @@ def stream_chat_reply(
         yield from stream.text_stream
 
 
-def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, Any]:
-    """Build corrected text exclusively from unambiguous, non-overlapping edits."""
+def _validate_message_edits(
+    original: str,
+    item: Dict[str, Any],
+    *,
+    tolerate_invalid: bool = False,
+    learner_message_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build corrected text exclusively from unambiguous, non-overlapping edits.
+
+    Normal validation is strict so Claude gets one chance to repair its response. On
+    the final attempt, ``tolerate_invalid`` lets the caller retain valid edits while
+    dropping entries that cannot be applied safely.
+    """
     if "corrections" not in item:
         raise ValueError("Missing corrections array")
     corrections, suggestions, spans = [], [], []
+    skipped_reasons: List[str] = []
     # Process actual errors before optional style entries, including legacy style categories.
     item = item.copy()
     if isinstance(item.get("corrections"), list) and isinstance(item.get("suggestions", []), list):
@@ -822,18 +940,35 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
     for key in ("corrections", "suggestions"):
         entries = item.get(key, [])
         if not isinstance(entries, list):
+            if tolerate_invalid:
+                skipped_reasons.append(f"{key}_not_array")
+                continue
             raise ValueError(f"{key} must be an array")
         for entry in entries:
             if not isinstance(entry, dict):
+                if tolerate_invalid:
+                    skipped_reasons.append("edit_not_object")
+                    continue
                 raise ValueError("Each edit must be an object")
             before, after = entry.get("original"), entry.get("corrected")
             explanation = entry.get("explanation")
             if not isinstance(before, str) or not before or not isinstance(after, str):
+                if tolerate_invalid:
+                    skipped_reasons.append("missing_edit_text")
+                    continue
                 raise ValueError("Edits need original and corrected strings")
             if not isinstance(explanation, str) or not explanation.strip():
+                if tolerate_invalid:
+                    skipped_reasons.append("missing_explanation")
+                    continue
                 raise ValueError("Edits need an explanation")
             starts = [i for i in range(len(original)) if original.startswith(before, i)]
             if len(starts) != 1:
+                if tolerate_invalid:
+                    skipped_reasons.append(
+                        "original_not_found" if not starts else "original_not_unique"
+                    )
+                    continue
                 raise ValueError("Original phrase must occur exactly once; include more context")
             if before.casefold() == after.casefold():
                 continue
@@ -845,6 +980,9 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
                     continue
                 if (start, end, after) in spans:
                     continue  # The same edit was reported under two grammar rules.
+                if tolerate_invalid:
+                    skipped_reasons.append("overlapping_correction")
+                    continue
                 raise ValueError(
                     "Corrections overlap; combine only the overlapping edits into the smallest "
                     "shared phrase and keep independent errors in separate corrections"
@@ -853,14 +991,28 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
                 suggestions.append({k: entry[k] for k in ("original", "corrected", "explanation")})
             else:
                 if entry.get("severity") not in {"light", "medium", "severe"}:
+                    if tolerate_invalid:
+                        skipped_reasons.append("invalid_severity")
+                        continue
                     raise ValueError("Invalid severity")
                 if entry.get("category") not in {
                     "grammar", "vocabulary", "word_order", "case", "gender",
                     "verb_conjugation", "preposition", "tense", "punctuation", "other",
                 }:
+                    if tolerate_invalid:
+                        skipped_reasons.append("invalid_category")
+                        continue
                     raise ValueError("Invalid category; ignore ordinary typos and spelling")
                 corrections.append(entry)
             spans.append((start, end, None if optional else after))
+    if skipped_reasons:
+        logger.warning(
+            "claude.analysis.invalid_edits_skipped learner_message_id=%s "
+            "skipped_count=%s reasons=%s",
+            learner_message_id,
+            len(skipped_reasons),
+            sorted(set(skipped_reasons)),
+        )
     corrected = original
     for start, end, replacement in sorted(spans, reverse=True):
         if replacement is not None:
@@ -870,13 +1022,22 @@ def _validate_message_edits(original: str, item: Dict[str, Any]) -> Dict[str, An
 
 
 def analyze_message_batch(messages: List[Dict[str, Any]], level: str = "C1") -> List[Dict[str, Any]]:
-    """Validate a batch atomically, retrying invalid output once before failing."""
+    """Validate a batch, retrying once and then retaining only safe edits."""
     if not messages:
         return []
     prompt = _build_message_analysis_prompt(messages, level)
     for attempt in range(2):
         response = client.messages.create(model=MODEL, max_tokens=2600,
                                          messages=[{"role": "user", "content": prompt}])
+        logger.info(
+            "claude.analysis.response message_id=%s stop_reason=%s attempt=%s/2 batch_size=%s",
+            getattr(response, "id", None),
+            getattr(response, "stop_reason", None),
+            attempt + 1,
+            len(messages),
+        )
+        raw_results: Any = None
+        by_id: Dict[int, Dict[str, Any]] = {}
         try:
             data = _load_jsonish_object(response.content[0].text.strip())
             raw_results = data.get("messages")
@@ -896,7 +1057,32 @@ def analyze_message_batch(messages: List[Dict[str, Any]], level: str = "C1") -> 
                      **_validate_message_edits(str(m["content"]), by_id[int(m["message_id"])])}
                     for m in messages]
         except (ValueError, TypeError, KeyError, IndexError) as exc:
+            logger.warning(
+                "claude.analysis.validation_failed message_id=%s attempt=%s/2 "
+                "error_type=%s error=%s",
+                getattr(response, "id", None),
+                attempt + 1,
+                type(exc).__name__,
+                exc,
+            )
             if attempt:
+                # The batch structure is unsafe to recover when IDs or item counts
+                # are wrong. If only edit semantics failed, retain every edit that
+                # can be applied unambiguously instead of losing the whole review.
+                if (
+                    isinstance(raw_results, list)
+                    and len(raw_results) == len(messages)
+                    and set(by_id) == {int(m["message_id"]) for m in messages}
+                ):
+                    return [{
+                        "message_id": int(m["message_id"]),
+                        **_validate_message_edits(
+                            str(m["content"]),
+                            by_id[int(m["message_id"])],
+                            tolerate_invalid=True,
+                            learner_message_id=int(m["message_id"]),
+                        ),
+                    } for m in messages]
                 raise ValueError("Invalid correction analysis after retry") from exc
             prompt += (
                 f"\nPrevious analysis failed validation: {exc}. Regenerate the complete batch."
@@ -1095,16 +1281,18 @@ def generate_teacher_rule(
 
 #── Flashcards ──────────────────────────────────────────────────────────────
 
-def generate_flashcard_set(
+def _generate_flashcard_batch(
     topic: str,
-    precise_topic: Optional[str] = None,
-    level: str = "B2",
-    count: int = 12,
-    translation_language: str = "en",
-    supplied_terms: Optional[List[str]] = None,
+    focus: str,
+    level: str,
+    count: int,
+    translation_language: str,
+    supplied_terms: Optional[List[str]],
+    source_id_start: int,
+    batch_number: int,
+    batch_count: int,
+    total_count: int,
 ) -> Dict[str, Any]:
-    """Generate a German flashcard set as structured JSON-ready data."""
-    focus = precise_topic.strip() if isinstance(precise_topic, str) and precise_topic.strip() else topic
     prompt = _build_flashcard_prompt(
         topic,
         focus,
@@ -1112,30 +1300,118 @@ def generate_flashcard_set(
         count,
         translation_language=translation_language,
         supplied_terms=supplied_terms,
+        source_id_start=1,
     )
 
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=max(1800, min(6000, count * 450)),
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=max(1800, min(FLASHCARD_MAX_OUTPUT_TOKENS, count * 450)),
+            timeout=FLASHCARD_REQUEST_TIMEOUT_SECONDS,
+            messages=[{"role": "user", "content": prompt}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": _flashcard_output_schema([
+                        f"term_{index:03d}"
+                        for index in range(1, count + 1)
+                    ] if supplied_terms else None),
+                }
+            },
+        )
+    except anthropic.APITimeoutError as exc:
+        logger.warning(
+            "claude.flashcards.request_failed error_type=%s batch=%s/%s",
+            type(exc).__name__,
+            batch_number,
+            batch_count,
+        )
+        raise FlashcardProviderError(
+            (
+                f"Claude took too long while generating flashcard batch "
+                f"{batch_number} of {batch_count}. Please try again."
+                if batch_count > 1
+                else "Claude took too long to generate the flashcard set. Please try again."
+            ),
+            http_status=503,
+        ) from exc
+    except anthropic.APIConnectionError as exc:
+        logger.warning(
+            "claude.flashcards.request_failed error_type=%s batch=%s/%s",
+            type(exc).__name__,
+            batch_number,
+            batch_count,
+        )
+        raise FlashcardProviderError(
+            "Claude could not be reached. Please try again shortly.",
+            http_status=503,
+        ) from exc
+    except anthropic.APIStatusError as exc:
+        provider_status = getattr(exc, "status_code", None)
+        logger.error(
+            "claude.flashcards.request_failed error_type=%s provider_status=%s "
+            "request_id=%s batch=%s/%s error=%s",
+            type(exc).__name__,
+            provider_status,
+            getattr(exc, "request_id", None),
+            batch_number,
+            batch_count,
+            exc,
+        )
+        if provider_status == 429:
+            detail = "Claude is temporarily rate-limited. Please try again shortly."
+            http_status = 503
+        elif provider_status is not None and provider_status >= 500:
+            detail = "Claude is temporarily unavailable. Please try again shortly."
+            http_status = 503
+        elif provider_status in {401, 403}:
+            detail = "Claude authentication failed. Check the server API configuration."
+            http_status = 502
+        else:
+            detail = "Claude rejected the flashcard request. Check the backend log for details."
+            http_status = 502
+        raise FlashcardProviderError(detail, http_status=http_status) from exc
     usage = getattr(response, "usage", None)
     stop_reason = getattr(response, "stop_reason", None)
     logger.info(
         "claude.flashcards.response message_id=%s stop_reason=%s input_tokens=%s "
-        "output_tokens=%s requested_count=%s supplied_terms=%s",
+        "output_tokens=%s total_count=%s batch_size=%s supplied_terms=%s batch=%s/%s",
         getattr(response, "id", None),
         stop_reason,
         getattr(usage, "input_tokens", None),
         getattr(usage, "output_tokens", None),
+        total_count,
         count,
         bool(supplied_terms),
+        batch_number,
+        batch_count,
     )
     if stop_reason == "max_tokens":
         raise FlashcardGenerationTruncatedError(
             "Claude reached the output-token limit before completing the flashcard set"
         )
-    raw_text = response.content[0].text.strip()
+    text_blocks = [
+        block.text
+        for block in getattr(response, "content", [])
+        if getattr(block, "type", None) == "text"
+        and isinstance(getattr(block, "text", None), str)
+        and block.text.strip()
+    ]
+    if not text_blocks:
+        content_types = [
+            getattr(block, "type", type(block).__name__)
+            for block in getattr(response, "content", [])
+        ]
+        logger.warning(
+            "claude.flashcards.missing_text message_id=%s stop_reason=%s content_types=%s",
+            getattr(response, "id", None),
+            stop_reason,
+            content_types,
+        )
+        raise FlashcardGenerationEmptyResponseError(
+            "Claude returned no usable text for the flashcard set"
+        )
+    raw_text = "\n".join(text_blocks).strip()
 
     try:
         data = _load_jsonish_object(raw_text)
@@ -1147,8 +1423,22 @@ def generate_flashcard_set(
         )
         raise
 
-    cards = data.get("cards")
-    if not isinstance(cards, list):
+    cards_value = data.get("cards")
+    if supplied_terms and isinstance(cards_value, dict):
+        cards = []
+        for local_source_id, card in cards_value.items():
+            if not isinstance(card, dict):
+                continue
+            local_match = re.fullmatch(r"term_(\d+)", local_source_id)
+            global_source_id = (
+                f"term_{source_id_start + int(local_match.group(1)) - 1:03d}"
+                if local_match
+                else local_source_id
+            )
+            cards.append({"source_id": global_source_id, **card})
+    elif isinstance(cards_value, list):
+        cards = cards_value
+    else:
         cards = []
 
     normalized_cards = []
@@ -1163,15 +1453,15 @@ def generate_flashcard_set(
         if not isinstance(back, str) or not back.strip():
             continue
 
-        case_examples = card.get("case_examples")
-        tense_examples = card.get("tense_examples")
+        case_examples = _labeled_examples_to_dict(card.get("case_examples"))
+        tense_examples = _labeled_examples_to_dict(card.get("tense_examples"))
         tags = card.get("tags")
         normalized_card = {
             "front": front.strip(),
             "back": back.strip(),
             "example": card.get("example").strip() if isinstance(card.get("example"), str) else "",
-            "case_examples": case_examples if isinstance(case_examples, dict) else {},
-            "tense_examples": tense_examples if isinstance(tense_examples, dict) else {},
+            "case_examples": case_examples,
+            "tense_examples": tense_examples,
             "tags": [tag.strip() for tag in tags if isinstance(tag, str) and tag.strip()][:8] if isinstance(tags, list) else [],
         }
         source_id = card.get("source_id")
@@ -1186,6 +1476,60 @@ def generate_flashcard_set(
         "description": data.get("description").strip() if isinstance(data.get("description"), str) else "",
         "cards": normalized_cards,
     }
+
+
+def generate_flashcard_set(
+    topic: str,
+    precise_topic: Optional[str] = None,
+    level: str = "B2",
+    count: int = 12,
+    translation_language: str = "en",
+    supplied_terms: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Generate a German flashcard set as structured JSON-ready data."""
+    focus = precise_topic.strip() if isinstance(precise_topic, str) and precise_topic.strip() else topic
+
+    if not supplied_terms:
+        return _generate_flashcard_batch(
+            topic=topic,
+            focus=focus,
+            level=level,
+            count=count,
+            translation_language=translation_language,
+            supplied_terms=None,
+            source_id_start=1,
+            batch_number=1,
+            batch_count=1,
+            total_count=count,
+        )
+
+    term_batches = [
+        supplied_terms[start:start + FLASHCARD_BATCH_SIZE]
+        for start in range(0, len(supplied_terms), FLASHCARD_BATCH_SIZE)
+    ]
+    generated_batches = [
+        _generate_flashcard_batch(
+            topic=topic,
+            focus=focus,
+            level=level,
+            count=len(term_batch),
+            translation_language=translation_language,
+            supplied_terms=term_batch,
+            source_id_start=(batch_number - 1) * FLASHCARD_BATCH_SIZE + 1,
+            batch_number=batch_number,
+            batch_count=len(term_batches),
+            total_count=len(supplied_terms),
+        )
+        for batch_number, term_batch in enumerate(term_batches, start=1)
+    ]
+
+    combined = generated_batches[0]
+    combined["cards"] = [
+        card
+        for generated_batch in generated_batches
+        for card in generated_batch["cards"]
+    ]
+    return combined
 
 
 def generate_vocabulary_cloze(

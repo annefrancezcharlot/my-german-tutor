@@ -19,6 +19,7 @@ import {
 } from '../../api';
 import type {
   Flashcard,
+  FlashcardExtendResult,
   FlashcardReviewRating,
   FlashcardSet,
   FlashcardSetSummary,
@@ -31,6 +32,12 @@ import type {
   VocabularyClozeSelection,
 } from '../../types';
 import { createMediaRecorder, playSpeech, stopMediaStream } from '../../utils/audio';
+import {
+  flashcardGenerationErrorMessage,
+  flashcardRequestErrorMessage,
+  MAX_FLASHCARD_TERMS,
+  parseFlashcardTerms,
+} from './flashcardUtils';
 
 type DetailTab = 'example' | 'cases' | 'tenses';
 type CardStartSide = 'front' | 'back';
@@ -86,12 +93,22 @@ const translationLanguageLabels: Record<FlashcardTranslationLanguage, string> = 
   fr: 'French',
 };
 
-export const parseFlashcardTerms = (value: string): string[] => Array.from(new Set(
-  value
-    .split(/[,;\n]+/)
-    .map(term => term.trim())
-    .filter(Boolean),
-)).slice(0, 30);
+const FlashcardTermPreview: React.FC<{ terms: string[] }> = ({ terms }) => {
+  if (terms.length === 0) return null;
+
+  return (
+    <details className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2">
+      <summary className="cursor-pointer text-xs font-semibold text-slate-300">
+        Review the {terms.length} {terms.length === 1 ? 'term' : 'terms'} that will be sent
+      </summary>
+      <ol className="mt-3 max-h-48 space-y-1 overflow-y-auto pl-6 text-sm text-slate-300">
+        {terms.map(term => (
+          <li key={term} className="list-decimal break-words pl-1">{term}</li>
+        ))}
+      </ol>
+    </details>
+  );
+};
 
 const maxSessionRepeats: Partial<Record<FlashcardReviewRating, number>> = {
   again: 2,
@@ -186,10 +203,19 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     ? `${completedCount} / ${initialQueueCount}`
     : '0 / 0';
   const unsavedCount = Object.keys(sessionTags).length;
-  const customTermCount = parseFlashcardTerms(customTermsText).length;
+  const customParsedTerms = useMemo(
+    () => parseFlashcardTerms(customTermsText),
+    [customTermsText],
+  );
+  const extendParsedTerms = useMemo(
+    () => parseFlashcardTerms(extendTermsText),
+    [extendTermsText],
+  );
+  const customTermCount = customParsedTerms.length;
+  const extendTermCount = extendParsedTerms.length;
   const canGenerateSet = generationMode === 'theme'
     ? Boolean(generateTopic.trim())
-    : customTermCount > 0;
+    : customTermCount > 0 && customTermCount <= MAX_FLASHCARD_TERMS;
   const mergeCandidates = selectedSet
     ? sets.filter(set => (
         set.id !== selectedSet.id
@@ -268,8 +294,10 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setShowBack(initialShowBack);
       setDetailTab('example');
       setPronunciationFeedback(null);
+      return true;
     } catch {
       setError('This flashcard set could not be loaded.');
+      return false;
     } finally {
       setLoadingSet(false);
     }
@@ -278,30 +306,45 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const handleGenerateSet = async () => {
     const topic = generationMode === 'theme' ? generateTopic.trim() : customSetName.trim();
     const preciseTopic = generatePreciseTopic.trim();
-    const suppliedTerms = parseFlashcardTerms(customTermsText);
+    const suppliedTerms = customParsedTerms;
     if (generatingSet || (generationMode === 'theme' ? !topic : suppliedTerms.length === 0)) return;
+    if (generationMode === 'terms' && suppliedTerms.length > MAX_FLASHCARD_TERMS) {
+      setError(`You entered ${suppliedTerms.length} terms. Remove ${suppliedTerms.length - MAX_FLASHCARD_TERMS} before generating.`);
+      return;
+    }
 
     setGeneratingSet(true);
     setError(null);
     try {
-      const generated = await generateFlashcardSet({
-        topic: topic || undefined,
-        precise_topic: generationMode === 'theme' ? preciseTopic || undefined : undefined,
-        count: generationMode === 'theme'
-          ? Math.min(30, Math.max(3, generateCount || 12))
-          : suppliedTerms.length,
-        terms: generationMode === 'terms' ? suppliedTerms : undefined,
-        translation_language: translationLanguage,
-      });
-      const nextSets = await getFlashcardSets();
-      setSets(nextSets);
+      let generated: FlashcardSetSummary;
+      try {
+        generated = await generateFlashcardSet({
+          topic: topic || undefined,
+          precise_topic: generationMode === 'theme' ? preciseTopic || undefined : undefined,
+          count: generationMode === 'theme'
+            ? Math.min(30, Math.max(3, generateCount || 12))
+            : suppliedTerms.length,
+          terms: generationMode === 'terms' ? suppliedTerms : undefined,
+          translation_language: translationLanguage,
+        });
+      } catch (generationError) {
+        setError(flashcardGenerationErrorMessage(generationError));
+        return;
+      }
+
       setGenerateTopic('');
       setGeneratePreciseTopic('');
       setCustomSetName('');
       setCustomTermsText('');
+
+      try {
+        setSets(await getFlashcardSets());
+      } catch {
+        setError('The flashcard set was created, but the list could not be refreshed. Reload the page to see it.');
+        return;
+      }
+
       await openSet(generated.id);
-    } catch {
-      setError('Flashcard set could not be generated.');
     } finally {
       setGeneratingSet(false);
     }
@@ -367,22 +410,39 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
   const handleExtendSet = async () => {
     if (!selectedSet || managingSet) return;
-    const terms = parseFlashcardTerms(extendTermsText);
+    const terms = extendParsedTerms;
     if (terms.length === 0) return;
+    if (terms.length > MAX_FLASHCARD_TERMS) {
+      setError(`You entered ${terms.length} terms. Remove ${terms.length - MAX_FLASHCARD_TERMS} before generating.`);
+      return;
+    }
     setManagingSet(true);
     setError(null);
     setManagementNotice(null);
     try {
-      const extended = await extendFlashcardSet(selectedSet.id, terms);
-      setSets(await getFlashcardSets());
-      await openSet(extended.id);
+      let extended: FlashcardExtendResult;
+      try {
+        extended = await extendFlashcardSet(selectedSet.id, terms);
+      } catch (extensionError) {
+        setError(flashcardRequestErrorMessage(extensionError, 'The new words could not be added.'));
+        return;
+      }
+
+      setExtendTermsText('');
+      try {
+        setSets(await getFlashcardSets());
+      } catch {
+        setError('The words were added, but the set list could not be refreshed. Reload the page to see them.');
+        return;
+      }
+
+      const opened = await openSet(extended.id);
+      if (!opened) return;
       const addedLabel = `${extended.added_count} ${extended.added_count === 1 ? 'word' : 'words'} added.`;
       const skippedLabel = extended.skipped_count > 0
         ? ` ${extended.skipped_count} ${extended.skipped_count === 1 ? 'word was' : 'words were'} already in the set and skipped.`
         : '';
       setManagementNotice(`${addedLabel}${skippedLabel}`);
-    } catch {
-      setError('The new words could not be added.');
     } finally {
       setManagingSet(false);
     }
@@ -807,6 +867,10 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   placeholder="German words or expressions, separated by commas or new lines"
                   className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
                 />
+                <p className="text-xs text-slate-500">
+                  Commas, semicolons, and new lines separate terms. Capitalization-only duplicates are included once.
+                </p>
+                <FlashcardTermPreview terms={customParsedTerms} />
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
@@ -828,8 +892,13 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                         ? 'Transcribing...'
                         : 'Dictate words'}
                   </button>
-                  <span className="text-xs text-slate-400">
-                    {customTermCount}/30 terms detected — review the transcription before generating.
+                  <span className={clsx(
+                    'text-xs',
+                    customTermCount > MAX_FLASHCARD_TERMS ? 'font-semibold text-red-300' : 'text-slate-400',
+                  )}>
+                    {customTermCount > MAX_FLASHCARD_TERMS
+                      ? `${customTermCount}/${MAX_FLASHCARD_TERMS} terms — remove ${customTermCount - MAX_FLASHCARD_TERMS} before generating.`
+                      : `${customTermCount}/${MAX_FLASHCARD_TERMS} terms detected — review the transcription before generating.`}
                   </span>
                 </div>
               </div>
@@ -1060,6 +1129,10 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   placeholder="New German words or expressions, separated by commas or new lines"
                   className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
                 />
+                <p className="text-xs text-slate-500">
+                  Commas, semicolons, and new lines separate terms. Capitalization-only duplicates are included once.
+                </p>
+                <FlashcardTermPreview terms={extendParsedTerms} />
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -1078,12 +1151,19 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                           : <Mic size={15} />}
                       {vocabularyRecording ? 'Stop dictating' : vocabularyTranscribing ? 'Transcribing...' : 'Dictate words'}
                     </button>
-                    <span className="text-xs text-slate-400">{parseFlashcardTerms(extendTermsText).length}/30 terms</span>
+                    <span className={clsx(
+                      'text-xs',
+                      extendTermCount > MAX_FLASHCARD_TERMS ? 'font-semibold text-red-300' : 'text-slate-400',
+                    )}>
+                      {extendTermCount > MAX_FLASHCARD_TERMS
+                        ? `${extendTermCount}/${MAX_FLASHCARD_TERMS} terms — remove ${extendTermCount - MAX_FLASHCARD_TERMS}.`
+                        : `${extendTermCount}/${MAX_FLASHCARD_TERMS} terms`}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => void handleExtendSet()}
-                    disabled={managingSet || vocabularyTranscribing || parseFlashcardTerms(extendTermsText).length === 0}
+                    disabled={managingSet || vocabularyTranscribing || extendTermCount === 0 || extendTermCount > MAX_FLASHCARD_TERMS}
                     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                   >
                     {managingSet ? 'Adding...' : 'Generate and add'}

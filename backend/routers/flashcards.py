@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
@@ -14,7 +15,12 @@ import unicodedata
 import models
 from auth import CurrentUser, get_current_user
 from database import get_db
-from services.claude_service import FlashcardGenerationTruncatedError, generate_flashcard_set
+from services.claude_service import (
+    FlashcardGenerationEmptyResponseError,
+    FlashcardGenerationTruncatedError,
+    FlashcardProviderError,
+    generate_flashcard_set,
+)
 from rate_limits import FLASHCARD_GENERATE_PER_HOUR, HOUR, require_user_rate_limit
 
 router = APIRouter(prefix="/flashcards", tags=["flashcards"])
@@ -31,6 +37,21 @@ STATUS_PRIORITY = {
     "easy": 4,
 }
 TRANSLATION_LANGUAGE_TAG_PREFIX = "__translation_language:"
+
+
+def _dedupe_terms(terms: List[str]) -> List[str]:
+    deduplicated = []
+    seen = set()
+    for term in terms:
+        if not isinstance(term, str) or not term.strip():
+            continue
+        cleaned = term.strip()
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append(cleaned)
+    return deduplicated
 
 
 class SessionReviewItem(BaseModel):
@@ -54,9 +75,7 @@ class FlashcardGenerateRequest(BaseModel):
     def validate_generation_source(self):
         self.topic = self.topic.strip() if self.topic else None
         self.precise_topic = self.precise_topic.strip() if self.precise_topic else None
-        self.terms = list(dict.fromkeys(
-            term.strip() for term in self.terms if isinstance(term, str) and term.strip()
-        ))
+        self.terms = _dedupe_terms(self.terms)
         if any(len(term) > 120 for term in self.terms):
             raise ValueError("Each German word or expression must be 120 characters or fewer")
         if not self.topic and not self.terms:
@@ -71,9 +90,7 @@ class FlashcardExtendRequest(BaseModel):
 
     @model_validator(mode="after")
     def normalize_terms(self):
-        self.terms = list(dict.fromkeys(
-            term.strip() for term in self.terms if isinstance(term, str) and term.strip()
-        ))
+        self.terms = _dedupe_terms(self.terms)
         if not self.terms:
             raise ValueError("Provide at least one German word or expression")
         if any(len(term) > 120 for term in self.terms):
@@ -157,11 +174,6 @@ def _load_json_set(path: Path) -> Dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
-    except FlashcardGenerationTruncatedError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Claude reached the output limit before completing the flashcard set",
-        ) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=500,
@@ -341,6 +353,36 @@ def _normalize_generated_flashcard_set(
         "description": description.strip() if isinstance(description, str) else "",
         "cards": normalized_cards,
     }
+
+
+def _save_generated_flashcard_set(
+    db: Session,
+    item: models.FlashcardSet,
+    *,
+    error_detail: str,
+    refresh_error_detail: Optional[str] = None,
+) -> None:
+    try:
+        db.add(item)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception(
+            "flashcards.database_save_failed set_id=%s card_count=%s",
+            item.id,
+            len(item.cards),
+        )
+        raise HTTPException(status_code=500, detail=error_detail) from exc
+
+    if refresh_error_detail:
+        try:
+            db.refresh(item)
+        except SQLAlchemyError as exc:
+            logger.exception(
+                "flashcards.database_refresh_failed set_id=%s",
+                item.id,
+            )
+            raise HTTPException(status_code=500, detail=refresh_error_detail) from exc
 
 
 def _validate_and_order_supplied_term_cards(
@@ -664,10 +706,20 @@ def generate_flashcard_set_file(
             translation_language=request.translation_language,
             supplied_terms=supplied_terms or None,
         )
+    except FlashcardProviderError as exc:
+        raise HTTPException(
+            status_code=exc.http_status,
+            detail=exc.public_detail,
+        ) from exc
     except FlashcardGenerationTruncatedError as exc:
         raise HTTPException(
             status_code=502,
             detail="Claude reached the output limit before completing the flashcard set",
+        ) from exc
+    except FlashcardGenerationEmptyResponseError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Claude returned no usable flashcard response",
         ) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=502, detail="The LLM returned invalid flashcard JSON") from exc
@@ -682,6 +734,14 @@ def generate_flashcard_set_file(
     )
     if supplied_terms:
         item["cards"] = _validate_and_order_supplied_term_cards(item["cards"], supplied_terms)
+    elif len(item["cards"]) != requested_count:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Claude returned {len(item['cards'])} of the "
+                f"{requested_count} requested usable flashcards"
+            ),
+        )
 
     db_set = models.FlashcardSet(
         id=item["id"],
@@ -709,9 +769,11 @@ def generate_flashcard_set_file(
             ],
         ))
 
-    db.add(db_set)
-    db.commit()
-    db.refresh(db_set)
+    _save_generated_flashcard_set(
+        db,
+        db_set,
+        error_detail="Flashcards were generated, but the set could not be saved.",
+    )
 
     return {
         "id": item["id"],
@@ -788,6 +850,21 @@ def extend_flashcard_set(
             translation_language=translation_language,
             supplied_terms=request.terms,
         )
+    except FlashcardProviderError as exc:
+        raise HTTPException(
+            status_code=exc.http_status,
+            detail=exc.public_detail,
+        ) from exc
+    except FlashcardGenerationTruncatedError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Claude reached the output limit before completing the flashcard set",
+        ) from exc
+    except FlashcardGenerationEmptyResponseError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Claude returned no usable flashcard response",
+        ) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=502, detail="The LLM returned invalid flashcard JSON") from exc
     except Exception as exc:
@@ -840,8 +917,15 @@ def extend_flashcard_set(
     else:
         result_item = source
     if new_cards:
-        db.commit()
-        db.refresh(result_item)
+        _save_generated_flashcard_set(
+            db,
+            result_item,
+            error_detail="The new flashcards were generated, but they could not be saved.",
+            refresh_error_detail=(
+                "The new flashcards were saved, but the updated set could not be reloaded. "
+                "Reload the page to see them."
+            ),
+        )
     result = _set_to_dict(result_item)
     result["added_count"] = len(new_cards)
     result["skipped_count"] = skipped_count

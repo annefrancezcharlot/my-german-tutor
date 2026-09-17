@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import json
+import httpx
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -15,8 +16,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 import auth
 import database
@@ -29,7 +32,12 @@ from routers.chat import (
     _build_realtime_transcription,
     _build_realtime_turn_detection,
 )
-from routers.flashcards import _validate_and_order_supplied_term_cards
+from routers.flashcards import (
+    FlashcardExtendRequest,
+    FlashcardGenerateRequest,
+    _save_generated_flashcard_set,
+    _validate_and_order_supplied_term_cards,
+)
 from main import app
 
 
@@ -1187,11 +1195,16 @@ def test_flashcards_router_with_mocked_generation(client, user, monkeypatch):
             "description": "Housing vocabulary",
             "cards": [
                 {
-                    "front": "die Wohnung",
-                    "back": "apartment",
-                    "example": "Ich suche eine Wohnung.",
+                    "front": front,
+                    "back": back,
+                    "example": example,
                     "tags": ["housing"],
                 }
+                for front, back, example in (
+                    ("die Wohnung", "apartment", "Ich suche eine Wohnung."),
+                    ("der Mietvertrag", "rental agreement", "Ich unterschreibe den Mietvertrag."),
+                    ("die Nebenkosten", "additional costs", "Die Nebenkosten sind hoch."),
+                )
             ],
         },
     )
@@ -1216,6 +1229,27 @@ def test_flashcards_router_with_mocked_generation(client, user, monkeypatch):
         },
     )
     assert saved.status_code == 200
+
+
+def test_flashcards_reject_partial_topic_generation(client, user, monkeypatch):
+    monkeypatch.setattr(
+        "routers.flashcards.generate_flashcard_set",
+        lambda **kwargs: {
+            "topic": "Housing",
+            "title": "Housing Words",
+            "cards": [{"front": "die Wohnung", "back": "apartment"}],
+        },
+    )
+
+    generated = client.post(
+        "/flashcards/sets/generate",
+        json={"topic": "Housing", "count": 3},
+    )
+
+    assert generated.status_code == 502
+    assert generated.json()["detail"] == (
+        "Claude returned 1 of the 3 requested usable flashcards"
+    )
 
 
 def test_flashcards_generate_from_supplied_terms_with_french_backs(client, user, monkeypatch):
@@ -1315,16 +1349,261 @@ def test_flashcard_generation_reports_truncated_claude_response(monkeypatch, cap
     assert "output_tokens=6000" in caplog.text
 
 
+def test_supplied_flashcard_terms_are_generated_in_stable_batches(monkeypatch):
+    responses = []
+    for start, terms in ((1, [f"Wort {index}" for index in range(1, 9)]), (9, ["Wort 9"])):
+        cards = {
+            f"term_{local_index:03d}": {
+                "front": term,
+                "back": f"meaning {start + local_index - 1}",
+            }
+            for local_index, term in enumerate(terms, start=1)
+        }
+        responses.append(SimpleNamespace(
+            id=f"msg_batch_{start}",
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=200, output_tokens=500),
+            content=[SimpleNamespace(type="text", text=json.dumps({"cards": cards}))],
+        ))
+
+    calls = []
+
+    def create_message(**kwargs):
+        calls.append(kwargs)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=create_message)),
+    )
+
+    generated = claude_service.generate_flashcard_set(
+        topic="Meine Wörter",
+        count=9,
+        supplied_terms=[f"Wort {index}" for index in range(1, 10)],
+    )
+
+    assert len(calls) == 2
+    assert [card["source_id"] for card in generated["cards"]] == [
+        f"term_{index:03d}" for index in range(1, 10)
+    ]
+    assert '"term_001": {' in calls[1]["messages"][0]["content"]
+    cards_schema = calls[0]["output_config"]["format"]["schema"]["properties"]["cards"]
+    assert calls[0]["output_config"]["format"]["type"] == "json_schema"
+    assert cards_schema["required"] == [f"term_{index:03d}" for index in range(1, 9)]
+    assert set(cards_schema["properties"]) == set(cards_schema["required"])
+    assert {
+        tuple(reference.items())
+        for reference in cards_schema["properties"].values()
+    } == {(('$ref', '#/$defs/card'),)}
+    assert cards_schema["additionalProperties"] is False
+
+
+def test_flashcard_generation_reads_text_block_after_other_content(monkeypatch):
+    response = SimpleNamespace(
+        id="msg_text_after_other_content",
+        stop_reason="end_turn",
+        usage=SimpleNamespace(input_tokens=100, output_tokens=100),
+        content=[
+            SimpleNamespace(type="thinking", thinking="internal reasoning"),
+            SimpleNamespace(
+                type="text",
+                text=json.dumps({
+                    "cards": [{
+                        "front": "das Haus",
+                        "back": "house",
+                        "case_examples": [
+                            {"label": "Akkusativ", "text": "Ich sehe das Haus."},
+                        ],
+                    }],
+                }),
+            ),
+        ],
+    )
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: response)),
+    )
+
+    generated = claude_service.generate_flashcard_set(topic="Wohnen", count=1)
+
+    assert generated["cards"][0]["front"] == "das Haus"
+    assert generated["cards"][0]["case_examples"] == {
+        "Akkusativ": "Ich sehe das Haus.",
+    }
+
+
+def test_flashcard_generation_rejects_response_without_text(monkeypatch, caplog):
+    response = SimpleNamespace(
+        id="msg_without_text",
+        stop_reason="end_turn",
+        usage=SimpleNamespace(input_tokens=100, output_tokens=0),
+        content=[SimpleNamespace(type="thinking", thinking="internal reasoning")],
+    )
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: response)),
+    )
+
+    with caplog.at_level("WARNING"), pytest.raises(
+        claude_service.FlashcardGenerationEmptyResponseError
+    ):
+        claude_service.generate_flashcard_set(topic="Wohnen", count=1)
+
+    assert "message_id=msg_without_text" in caplog.text
+    assert "content_types=['thinking']" in caplog.text
+
+
+def test_flashcard_generation_logs_provider_request_failure(monkeypatch, caplog):
+    response = httpx.Response(
+        400,
+        headers={"request-id": "req_schema_test"},
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+    )
+    provider_error = claude_service.anthropic.BadRequestError(
+        "schema was rejected",
+        response=response,
+        body={"error": {"type": "invalid_request_error"}},
+    )
+
+    def reject_request(**kwargs):
+        raise provider_error
+
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=reject_request)),
+    )
+
+    with caplog.at_level("ERROR"), pytest.raises(
+        claude_service.FlashcardProviderError
+    ) as exc_info:
+        claude_service.generate_flashcard_set(
+            topic="Meine Wörter",
+            count=1,
+            supplied_terms=["Haus"],
+        )
+
+    assert exc_info.value.http_status == 502
+    assert "rejected the flashcard request" in exc_info.value.public_detail
+    assert "provider_status=400" in caplog.text
+    assert "request_id=req_schema_test" in caplog.text
+    assert "error=schema was rejected" in caplog.text
+
+
+def test_large_theme_generation_uses_expanded_output_limit_and_timeout(monkeypatch):
+    captured = {}
+    response = SimpleNamespace(
+        id="msg_large_theme",
+        stop_reason="end_turn",
+        usage=SimpleNamespace(input_tokens=200, output_tokens=100),
+        content=[SimpleNamespace(
+            type="text",
+            text=json.dumps({"cards": [{"front": "das Haus", "back": "house"}]}),
+        )],
+    )
+
+    def create_message(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=create_message)),
+    )
+
+    claude_service.generate_flashcard_set(topic="Wohnen", count=30)
+
+    assert captured["max_tokens"] == 13500
+    assert captured["timeout"] == 120
+
+
+def test_flashcard_timeout_identifies_the_failed_batch(monkeypatch):
+    timeout_error = claude_service.anthropic.APITimeoutError(
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+    )
+
+    def time_out(**kwargs):
+        raise timeout_error
+
+    monkeypatch.setattr(
+        claude_service,
+        "client",
+        SimpleNamespace(messages=SimpleNamespace(create=time_out)),
+    )
+
+    with pytest.raises(claude_service.FlashcardProviderError) as exc_info:
+        claude_service.generate_flashcard_set(
+            topic="Meine Wörter",
+            count=9,
+            supplied_terms=[f"Wort {index}" for index in range(1, 10)],
+        )
+
+    assert exc_info.value.http_status == 503
+    assert "batch 1 of 2" in exc_info.value.public_detail
+
+
+def test_flashcard_requests_deduplicate_terms_case_insensitively():
+    generated = FlashcardGenerateRequest(terms=["Haus", " haus ", "HAUS", "Wohnung"])
+    extended = FlashcardExtendRequest(terms=["Baum", "BAUM", "Blume"])
+
+    assert generated.terms == ["Haus", "Wohnung"]
+    assert extended.terms == ["Baum", "Blume"]
+
+
+def test_flashcard_database_failure_rolls_back_and_returns_clear_error():
+    class FailingSession:
+        def __init__(self):
+            self.rolled_back = False
+
+        def add(self, item):
+            pass
+
+        def commit(self):
+            raise SQLAlchemyError("write failed")
+
+        def refresh(self, item):
+            raise AssertionError("refresh must not run after a failed commit")
+
+        def rollback(self):
+            self.rolled_back = True
+
+    failing_db = FailingSession()
+    item = SimpleNamespace(id="generated_test", cards=[])
+
+    with pytest.raises(HTTPException) as exc_info:
+        _save_generated_flashcard_set(
+            failing_db,
+            item,
+            error_detail="Flashcards were generated, but the set could not be saved.",
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Flashcards were generated, but the set could not be saved."
+    assert failing_db.rolled_back is True
+
+
 def test_personal_flashcard_set_management(client, db_session, user, monkeypatch):
     def fake_generation(**kwargs):
-        terms = kwargs.get("supplied_terms") or [kwargs["topic"]]
+        supplied_terms = kwargs.get("supplied_terms")
+        terms = supplied_terms or [
+            kwargs["topic"],
+            *[
+                f"{kwargs['topic']} {index}"
+                for index in range(2, kwargs["count"] + 1)
+            ],
+        ]
         return {
             "topic": kwargs["topic"],
             "title": f"{kwargs['topic']} cards",
             "description": "Generated cards",
             "cards": [
                 {
-                    **({"source_id": f"term_{index:03d}"} if kwargs.get("supplied_terms") else {}),
+                    **({"source_id": f"term_{index:03d}"} if supplied_terms else {}),
                     "front": f"die {term}",
                     "back": f"the {term}",
                     "example": f"Das ist die {term}.",

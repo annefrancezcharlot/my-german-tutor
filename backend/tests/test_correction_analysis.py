@@ -79,6 +79,54 @@ def test_invalid_batch_fails_after_one_retry(monkeypatch):
     assert len(calls) == 2
 
 
+def test_retry_salvages_safe_edits_and_skips_ambiguous_edit(monkeypatch, caplog):
+    original = 'Das ist gut, und das ist auch gut. Ich habe ein Hund.'
+    invalid_result = {'messages': [{
+        'message_id': 1,
+        'corrections': [
+            edit('gut', 'besser'),
+            edit('ein Hund', 'einen Hund', 'case'),
+        ],
+    }]}
+    responses = [invalid_result, invalid_result]
+
+    def create(**kwargs):
+        return SimpleNamespace(
+            id='msg_analysis_test',
+            stop_reason='end_turn',
+            content=[SimpleNamespace(text=json.dumps(responses.pop(0)))],
+        )
+
+    monkeypatch.setattr(service.client.messages, 'create', create)
+    result = service.analyze_message_batch([{'message_id': 1, 'content': original}])
+
+    assert result[0]['corrected_user_message'] == (
+        'Das ist gut, und das ist auch gut. Ich habe einen Hund.'
+    )
+    assert result[0]['corrections'] == [invalid_result['messages'][0]['corrections'][1]]
+    assert 'original_not_unique' in caplog.text
+
+
+def test_retry_salvage_drops_conflicting_overlap(monkeypatch):
+    original = 'Ich habe ein Hund.'
+    invalid_result = {'messages': [{
+        'message_id': 1,
+        'corrections': [
+            edit('ein Hund', 'einen Hund', 'case'),
+            edit('Hund', 'grossen Hund', 'grammar'),
+        ],
+    }]}
+    responses = [invalid_result, invalid_result]
+    monkeypatch.setattr(service.client.messages, 'create', lambda **kwargs: SimpleNamespace(
+        content=[SimpleNamespace(text=json.dumps(responses.pop(0)))],
+    ))
+
+    result = service.analyze_message_batch([{'message_id': 1, 'content': original}])
+
+    assert result[0]['corrected_user_message'] == 'Ich habe einen Hund.'
+    assert result[0]['corrections'] == [invalid_result['messages'][0]['corrections'][0]]
+
+
 def test_optional_overlap_does_not_block_corrections():
     result = service._validate_message_edits('Ich habe ein Hund.', {
         'corrections': [edit('Ich habe ein Hund.', 'Ich besitze einen Hund.', 'style'),
