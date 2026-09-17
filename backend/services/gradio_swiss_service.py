@@ -1,6 +1,10 @@
+import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
+from uuid import uuid4
 
 import httpx
 from dotenv import load_dotenv
@@ -9,6 +13,7 @@ env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(env_path)
 
 _client_cache: dict[str, Any] = {}
+logger = logging.getLogger(__name__)
 
 
 def _get_gradio_client(space: str):
@@ -30,6 +35,53 @@ def _predict_direct(space: str, fn_index: int, *args: Any) -> Any:
     )
     response.raise_for_status()
     return response.json()
+
+
+def _predict_queued(space: str, fn_index: int, *args: Any) -> Any:
+    """Run a Gradio SSE queue job, matching the flow used by its web client."""
+    base_url = f"{space.rstrip('/')}/"
+    session_hash = uuid4().hex
+    with httpx.Client(timeout=httpx.Timeout(240, connect=30)) as queue_client:
+        joined = queue_client.post(
+            urljoin(base_url, "queue/join"),
+            json={
+                "data": list(args),
+                "fn_index": fn_index,
+                "session_hash": session_hash,
+            },
+        )
+        joined.raise_for_status()
+        event_id = joined.json().get("event_id")
+        if not isinstance(event_id, str) or not event_id:
+            raise RuntimeError("Gradio queue did not return an event ID")
+
+        logger.info(
+            "gradio.swiss_tts.queued event_id=%s fn_index=%s",
+            event_id,
+            fn_index,
+        )
+        with queue_client.stream(
+            "GET",
+            urljoin(base_url, "queue/data"),
+            params={"session_hash": session_hash},
+        ) as stream:
+            stream.raise_for_status()
+            for line in stream.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                message = json.loads(line[5:])
+                if message.get("event_id") != event_id:
+                    continue
+                if message.get("msg") != "process_completed":
+                    continue
+                output = message.get("output")
+                if not message.get("success", True) or not isinstance(output, dict):
+                    error = output.get("error") if isinstance(output, dict) else None
+                    raise RuntimeError(error or "Gradio Swiss German TTS job failed")
+                logger.info("gradio.swiss_tts.completed event_id=%s", event_id)
+                return output
+
+    raise RuntimeError("Gradio Swiss German TTS queue ended without a result")
 
 
 def _predict(space: str, api_name: Optional[str], *args: Any, fn_index: Optional[int] = None) -> Any:
@@ -131,13 +183,12 @@ def rewrite_messages_to_swiss_german(
 
 def synthesize_swiss_german_speech(text: str, dialect: Optional[str] = None) -> bytes:
     space = os.getenv("GRADIO_SWISS_TTS_SPACE") or os.getenv("GRADIO_SWISS_TTS_URL")
-    api_name = os.getenv("GRADIO_SWISS_TTS_API_NAME", "/speech_interface")
     fn_index = int(os.getenv("GRADIO_SWISS_TTS_FN_INDEX", "1"))
     selected_dialect = dialect or os.getenv("GRADIO_SWISS_TTS_DIALECT", os.getenv("GRADIO_SWISS_TEXT_DIALECT", "Bern"))
     if not space:
         raise RuntimeError("GRADIO_SWISS_TTS_SPACE must be set for Swiss German speech")
 
-    raw_result = _predict(space, api_name, text, selected_dialect, fn_index=fn_index)
+    raw_result = _predict_queued(space, fn_index, text, selected_dialect)
     audio_bytes = _extract_audio_bytes(raw_result)
     if audio_bytes:
         return audio_bytes
@@ -146,8 +197,13 @@ def synthesize_swiss_german_speech(text: str, dialect: Optional[str] = None) -> 
     if not audio_path:
         raise RuntimeError("Gradio Swiss German TTS did not return an audio file")
 
-    if audio_path.startswith(("http://", "https://")):
-        response = httpx.get(audio_path, timeout=60)
+    if audio_path.startswith(("http://", "https://", "/")):
+        download_url = (
+            audio_path
+            if audio_path.startswith(("http://", "https://"))
+            else urljoin(base_url := f"{space.rstrip('/')}/", audio_path)
+        )
+        response = httpx.get(download_url, timeout=60)
         response.raise_for_status()
         return response.content
 

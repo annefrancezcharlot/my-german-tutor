@@ -66,7 +66,13 @@ export const playSpeech = async (
   activePlayback = (async () => {
     let audioUrl: string | null = null;
     try {
-      if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('audio/mpeg')) {
+      // The Swiss provider returns a complete WAV file. Only OpenAI speech is an
+      // MP3 stream that can be appended incrementally through MediaSource.
+      if (
+        options.model !== 'gradio_swiss_tts'
+        && typeof MediaSource !== 'undefined'
+        && MediaSource.isTypeSupported('audio/mpeg')
+      ) {
         const response = await createSpeechStream(
           text,
           options.voice,

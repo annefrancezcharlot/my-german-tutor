@@ -1,9 +1,10 @@
 from difflib import SequenceMatcher
 from io import BytesIO
+import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import CurrentUser, get_current_user
@@ -14,9 +15,10 @@ from rate_limits import (
     PRONUNCIATION_FEEDBACK_PER_HOUR,
     require_user_rate_limit,
 )
-from services.audio_service import stream_speech, transcribe_audio
+from services.audio_service import stream_speech, synthesize_speech, transcribe_audio
 
 router = APIRouter(prefix="/audio", tags=["audio"], dependencies=[Depends(get_current_user)])
+logger = logging.getLogger(__name__)
 
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
 ALLOWED_AUDIO_CONTENT_TYPES = {
@@ -142,6 +144,47 @@ def speech(
 ):
     require_user_rate_limit(current_user, "audio:speech", AUDIO_SPEECH_PER_HOUR, HOUR)
 
+    headers = {
+        "Content-Disposition": 'inline; filename="speech.mp3"',
+        "Cache-Control": "no-store",
+        "X-Accel-Buffering": "no",
+    }
+
+    # The Swiss provider returns the complete file rather than a byte stream. Resolve
+    # it before sending response headers so upstream failures become a useful 503
+    # response instead of a broken 200 audio stream.
+    if request.model == "gradio_swiss_tts":
+        try:
+            audio = synthesize_speech(
+                text=request.text,
+                voice=request.voice,
+                style=request.style,
+                model=request.model,
+                dialect=request.dialect,
+            )
+        except Exception as exc:
+            response = getattr(exc, "response", None)
+            logger.exception(
+                "audio.swiss_tts_failed dialect=%s error_type=%s provider_status=%s",
+                request.dialect,
+                type(exc).__name__,
+                getattr(response, "status_code", None),
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Swiss German audio service is temporarily unavailable.",
+            ) from exc
+        logger.info(
+            "audio.swiss_tts_completed dialect=%s audio_bytes=%s",
+            request.dialect,
+            len(audio),
+        )
+        swiss_headers = {
+            **headers,
+            "Content-Disposition": 'inline; filename="speech.wav"',
+        }
+        return Response(content=audio, media_type="audio/wav", headers=swiss_headers)
+
     return StreamingResponse(
         stream_speech(
             text=request.text,
@@ -151,11 +194,7 @@ def speech(
             dialect=request.dialect,
         ),
         media_type="audio/mpeg",
-        headers={
-            "Content-Disposition": 'inline; filename="speech.mp3"',
-            "Cache-Control": "no-store",
-            "X-Accel-Buffering": "no",
-        },
+        headers=headers,
     )
 
 
