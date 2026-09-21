@@ -1,11 +1,11 @@
 import React from 'react';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 import type { TimelineEntry } from '../../types';
 
-interface Props { timeline: TimelineEntry[]; }
+interface Props { timeline: TimelineEntry[]; series?: 'all' | 'score' | 'words'; }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -26,7 +26,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export const ProgressChart: React.FC<Props> = ({ timeline }) => {
+export const ProgressChart: React.FC<Props> = ({ timeline, series = 'all' }) => {
   const data = timeline.map((t, i) => ({
     name: `G${i + 1}`,
     topic: t.topic.length > 22 ? t.topic.slice(0, 22) + '…' : t.topic,
@@ -45,6 +45,7 @@ export const ProgressChart: React.FC<Props> = ({ timeline }) => {
           tickLine={false}
         />
         <YAxis
+          hide={series === 'score'}
           yAxisId="length"
           orientation="left"
           tick={{ fill: '#94a3b8', fontSize: 11 }}
@@ -52,20 +53,17 @@ export const ProgressChart: React.FC<Props> = ({ timeline }) => {
           tickLine={false}
         />
         <YAxis
+          hide={series === 'words'}
           yAxisId="score"
-          orientation="right"
+          orientation={series === 'score' ? 'left' : 'right'}
           domain={[0, 100]}
           tick={{ fill: '#94a3b8', fontSize: 11 }}
           axisLine={false}
           tickLine={false}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Legend
-          formatter={(v) => (
-            <span className="text-xs text-slate-300">{v}</span>
-          )}
-        />
-        <Bar
+
+        {series !== 'score' && <Bar
           yAxisId="length"
           dataKey="words"
           name="Words"
@@ -73,8 +71,8 @@ export const ProgressChart: React.FC<Props> = ({ timeline }) => {
           opacity={0.7}
           radius={[3, 3, 0, 0]}
           maxBarSize={32}
-        />
-        <Line
+        />}
+        {series !== 'words' && <Line
           yAxisId="score"
           dataKey="score"
           name="Score"
@@ -83,7 +81,7 @@ export const ProgressChart: React.FC<Props> = ({ timeline }) => {
           dot={{ fill: '#3b82f6', r: 4 }}
           activeDot={{ r: 6 }}
           connectNulls
-        />
+        />}
       </ComposedChart>
     </ResponsiveContainer>
   );

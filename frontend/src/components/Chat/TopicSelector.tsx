@@ -7,14 +7,6 @@ import { clsx } from 'clsx';
 
 interface Props { user: User; }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Society: 'border-blue-500 bg-blue-500/10',
-  Culture:  'border-purple-500 bg-purple-500/10',
-  Science:  'border-green-500 bg-green-500/10',
-  Lifestyle:'border-orange-500 bg-orange-500/10',
-  'Free discussions': 'border-cyan-500 bg-cyan-500/10',
-};
-
 const cleanFreeConversationTitle = (title: string) => {
   const suffixPattern = /\s*:\s*(?:Free topic|Freies Thema)\.\s*(?:Let's talk about this topic|Lass uns ueber dieses Thema sprechen):\s*.*$/i;
   const prefixPattern = /^(?:Free topic|Freies Thema)\.\s*(?:Let's talk about this topic|Lass uns ueber dieses Thema sprechen):\s*/i;
@@ -66,15 +58,11 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
     : freeConversationTopics.filter(item => (item.category || 'Free discussions') === activeCategory);
   const savedTopicGroups = Array.from(filteredFreeConversationTopics.reduce((groups, item) => {
     const category = item.category || 'Free discussions';
-    if (category === 'Free discussions') return groups;
     const items = groups.get(category) || [];
     items.push(item);
     groups.set(category, items);
     return groups;
-  }, new Map<string, RecentFreeTopic[]>([[
-    'Free discussions',
-    freeConversationTopics.filter(item => !item.category || item.category === 'Free discussions'),
-  ]])));
+  }, new Map<string, RecentFreeTopic[]>()));
   const buildSelection = (topic: Topic, starter: ConversationStarter): SelectedConversation => ({
     topicId: topic.id,
     title: topic.title,
@@ -147,173 +135,142 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
 
   return (
     <div>
-      <div className="mb-5 flex flex-col gap-3 sm:mb-8 md:flex-row md:items-end md:justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="mb-1 text-2xl font-bold text-white sm:mb-2 sm:text-3xl">Choose a topic</h1>
-          <p className="text-sm text-slate-400 sm:text-base">Choose a topic, start from a specific prompt, or get a random one.</p>
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Choose a topic</h1>
+          <p className="mt-2 text-sm text-slate-400">Start with your own idea or browse saved topics.</p>
         </div>
         <button
+          type="button"
           onClick={handleRandomTopic}
           disabled={loading || topics.length === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {starting === '__random-topic__' ? (
-            <><Loader2 size={16} className="animate-spin" /> Starting random topic...</>
-          ) : (
-            <><Dice5 size={16} /> Random topic</>
-          )}
+          {starting === '__random-topic__' ? <Loader2 size={16} className="animate-spin" /> : <Dice5 size={16} />}
+          Random topic
         </button>
       </div>
 
-      <div className="mb-5 rounded-xl border border-slate-700 bg-slate-800 p-4 sm:mb-8 sm:rounded-2xl sm:p-5">
-        <div className="mb-3">
-          <h2 className="text-lg font-semibold text-white">Your own topic</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Start a free conversation. You can choose the category when saving.
-          </p>
-        </div>
+      <form
+        onSubmit={event => { event.preventDefault(); handleFreeTopicStart(); }}
+        className="mb-10"
+      >
         <div className="flex flex-col gap-3 sm:flex-row">
           <input
+            id="conversation-topic"
             value={freeTopic}
             onChange={event => setFreeTopic(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                handleFreeTopicStart();
-              }
-            }}
             placeholder="What would you like to talk about?"
-            className="min-w-0 flex-1 rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
+            className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
           <button
-            type="button"
-            onClick={handleFreeTopicStart}
+            type="submit"
             disabled={!freeTopic.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <MessageSquare size={16} />
-            Start conversation
+            <MessageSquare size={16} /> Start conversation
           </button>
+        </div>
+      </form>
+
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <div className="flex items-center gap-3">
+          <label htmlFor="topic-category" className="text-sm text-slate-400"></label>
+          <select
+            id="topic-category"
+            value={activeCategory}
+            onChange={event => { setActiveCategory(event.target.value); setExpandedTopicId(null); }}
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:max-w-64"
+          >
+            {categories.map(category => <option key={category} value={category}>{category === 'All' ? 'All categories' : category}</option>)}
+          </select>
         </div>
       </div>
 
-      {/* Category filter */}
-      <div className="-mx-3 mb-4 flex flex-nowrap gap-2 overflow-x-auto px-3 pb-2 sm:mx-0 sm:mb-6 sm:flex-wrap sm:px-0 sm:pb-0">
-        {categories.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={clsx(
-              'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-              activeCategory === cat
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            )}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* Topic grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {savedTopicGroups.length === 0 && filtered.length === 0 && (
+        <p className="py-8 text-sm text-slate-400">No saved prompts in this category yet. Start a conversation with your own topic above.</p>
+      )}
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
         {savedTopicGroups.map(([category, items]) => {
           const groupId = `saved-category:${category}`;
+          const expanded = expandedTopicId === groupId;
           return (
-            <div key={groupId} className={clsx(
-              'rounded-xl border p-5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30',
-              CATEGORY_COLORS[category] || CATEGORY_COLORS['Free discussions'],
-            )}>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{category}</div>
-              <h3 className="mb-2 text-lg font-bold text-white">{category === 'Free discussions' ? 'Free conversation' : category}</h3>
-              <p className="mb-4 text-sm text-slate-400">{items.length} saved {items.length === 1 ? 'prompt' : 'prompts'}</p>
-              <button type="button"
-                onClick={() => setExpandedTopicId(current => current === groupId ? null : groupId)}
-                aria-expanded={expandedTopicId === groupId}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-900/60">
-                <ChevronDown size={16} className={clsx('transition-transform', expandedTopicId === groupId && 'rotate-180')} />
-                {category === 'Free discussions' ? 'Show free topics' : 'Choose specific prompt'}
-              </button>
-              {expandedTopicId === groupId && (
-                <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                  {items.length === 0 && <p className="text-sm text-slate-400">No free conversations saved yet. Start one using Your own topic above.</p>}
+            <section key={groupId} className="overflow-hidden rounded-xl bg-slate-800/70">
+              <h3>
+                <button
+                  type="button"
+                  onClick={() => setExpandedTopicId(current => current === groupId ? null : groupId)}
+                  aria-expanded={expanded}
+                  className="flex w-full items-center justify-between gap-4 p-5 text-left transition-colors hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
+                >
+                  <span className="min-w-0">
+                    <span className="block break-words text-base font-semibold text-white">{category}</span>
+                    <span className="mt-1 block text-sm font-normal text-slate-400">{items.length} saved {items.length === 1 ? 'prompt' : 'prompts'}</span>
+                  </span>
+                  <ChevronDown size={18} className={clsx('shrink-0 text-slate-400 transition-transform', expanded && 'rotate-180')} />
+                </button>
+              </h3>
+              {expanded && (
+                <div className="mx-5 space-y-2 border-t border-slate-700/60 py-4">
                   {items.map(item => (
                     <button key={item.title} type="button" onClick={() => handleFreeConversationTopicStart(item)}
-                      className="block w-full rounded-lg border border-white/10 bg-slate-900/40 p-3 text-left transition-colors hover:bg-slate-900/60">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                        <MessageSquare size={15} className="text-cyan-300" />
-                        {cleanFreeConversationTitle(item.title)}
-                      </div>
+                      className="flex w-full items-start gap-2 rounded-lg p-3 text-left text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700/50 hover:text-white">
+                      <MessageSquare size={15} className="mt-0.5 shrink-0 text-slate-400" />
+                      {cleanFreeConversationTitle(item.title)}
                     </button>
                   ))}
                 </div>
               )}
-            </div>
+            </section>
           );
         })}
 
-        {filtered.map(topic => (
-          <div
-            key={topic.id}
-            className={clsx(
-              'rounded-xl border p-5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30',
-              CATEGORY_COLORS[topic.category] || 'border-slate-600 bg-slate-800'
-            )}
-          >
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
-              {topic.category}
-            </div>
-            <h3 className="font-bold text-white text-lg mb-2">{topic.title}</h3>
-            <p className="text-sm text-slate-400 mb-4">{topic.description}</p>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleStart(topic, pickRandomStarter(topic), `${topic.id}::random`)}
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                {starting === `${topic.id}::random` ? (
-                  <><Loader2 size={16} className="animate-spin" /> Starting...</>
-                ) : (
-                  <><Dice5 size={16} /> Random prompt</>
-                )}
-              </button>
-              <button
-                onClick={() => setExpandedTopicId(current => current === topic.id ? null : topic.id)}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-900/60 flex items-center justify-center gap-2"
-              >
-                <ChevronDown
-                  size={16}
-                  className={clsx('transition-transform', expandedTopicId === topic.id && 'rotate-180')}
-                />
-                Choose specific prompt
-              </button>
-            </div>
-
-            {expandedTopicId === topic.id && (
-              <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                {topic.conversation_starters.map(starter => (
+        {filtered.map(topic => {
+          const expanded = expandedTopicId === topic.id;
+          return (
+            <section key={topic.id} className="overflow-hidden rounded-xl bg-slate-800/70">
+              <h3>
+                <button
+                  type="button"
+                  onClick={() => setExpandedTopicId(current => current === topic.id ? null : topic.id)}
+                  aria-expanded={expanded}
+                  className="flex w-full items-center justify-between gap-4 p-5 text-left transition-colors hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
+                >
+                  <span className="min-w-0">
+                    <span className="block break-words text-base font-semibold text-white">{topic.title}</span>
+                    <span className="mt-1 block text-sm font-normal text-slate-400">{topic.conversation_starters.length} saved {topic.conversation_starters.length === 1 ? 'prompt' : 'prompts'}</span>
+                  </span>
+                  <ChevronDown size={18} className={clsx('shrink-0 text-slate-400 transition-transform', expanded && 'rotate-180')} />
+                </button>
+              </h3>
+              {expanded && (
+                <div className="mx-5 space-y-2 border-t border-slate-700/60 py-4">
+                  <p className="mb-3 text-sm text-slate-400">{topic.description}</p>
                   <button
-                    key={starter.id}
-                    onClick={() => handleStart(topic, starter, `${topic.id}::${starter.id}`)}
-                    disabled={loading}
-                    className="block w-full rounded-lg border border-white/10 bg-slate-900/40 p-3 text-left transition-colors hover:bg-slate-900/60 disabled:opacity-50"
+                    type="button"
+                    onClick={() => handleStart(topic, pickRandomStarter(topic), `${topic.id}::random`)}
+                    disabled={loading || topic.conversation_starters.length === 0}
+                    className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700/50 disabled:opacity-50"
                   >
-                    <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
-                      <MessageSquare size={15} className="text-blue-300" />
-                      {starter.title}
-                    </div>
-                    {starting === `${topic.id}::${starter.id}` && (
-                      <div className="mt-2 flex items-center gap-2 text-xs text-blue-200">
-                        <Loader2 size={14} className="animate-spin" />
-                        Preparing conversation...
-                      </div>
-                    )}
+                    <Dice5 size={16} /> Random prompt
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                  {topic.conversation_starters.map(starter => (
+                    <button
+                      key={starter.id}
+                      type="button"
+                      onClick={() => handleStart(topic, starter, `${topic.id}::${starter.id}`)}
+                      disabled={loading}
+                      className="flex w-full items-start gap-2 rounded-lg p-3 text-left text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700/50 hover:text-white disabled:opacity-50"
+                    >
+                      <MessageSquare size={15} className="mt-0.5 shrink-0 text-slate-400" />
+                      {starter.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
     </div>
   );

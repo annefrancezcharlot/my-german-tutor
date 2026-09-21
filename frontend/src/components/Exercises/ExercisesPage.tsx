@@ -184,33 +184,14 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
     <div className="space-y-4 sm:space-y-6">
       <div>
         <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Exercises</h1>
-        <p className="text-slate-400 text-sm">
-          Targeted practice based on your most frequent mistakes.
-        </p>
       </div>
 
       {/* ── Generate panel ──────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 sm:rounded-2xl sm:p-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="font-semibold text-white mb-1 flex items-center gap-2">
-              <Zap size={16} className="text-yellow-400" />
-              Generate new exercises
-            </h2>
-            <p className="text-xs text-slate-400">
-              Choose an optional category, type a precise focus, or let the AI decide.
-            </p>
-          </div>
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 transition-colors"
-          >
-            {generating
-              ? <><Loader2 size={15} className="animate-spin" /> Generating...</>
-              : <><RefreshCw size={15} /> Create exercises</>}
-          </button>
-        </div>
+        <h2 className="font-semibold text-white flex items-center gap-2">
+          <Zap size={16} className="text-yellow-400" />
+          Generate new exercises
+        </h2>
 
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-blue-800/50 bg-blue-950/35 px-3 py-2.5 text-xs leading-relaxed text-blue-100">
           <Info size={15} className="mt-0.5 shrink-0 text-blue-400" />
@@ -283,6 +264,17 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
             </div>
           </div>
         )}
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+          >
+            {generating
+              ? <><Loader2 size={15} className="animate-spin" /> Generating...</>
+              : <><RefreshCw size={15} /> Create exercises</>}
+          </button>
+        </div>
       </div>
 
       {generationError && (

@@ -31,6 +31,10 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
   const [timeline, setTimeline]     = useState<TimelineEntry[]>([]);
   const [exerciseTimeline, setExerciseTimeline] = useState<ExerciseTimelineEntry[]>([]);
   const [activityTimeline, setActivityTimeline] = useState<ActivityTimelineEntry[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [conversationSeries, setConversationSeries] = useState<'all' | 'score' | 'words'>('all');
+  const [exerciseCategory, setExerciseCategory] = useState('all');
+  const [activitySeries, setActivitySeries] = useState<'all' | 'conversations' | 'exercises' | 'flashcardSets'>('all');
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
@@ -63,6 +67,12 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
 
   /* ── Derived stats ──────────────────────────────────────────────── */
   const completedSessions = sessions.filter(s => s.ended_at);
+  const inDateRange = (entry: { date: string }) => !startDate || entry.date.slice(0, 10) >= startDate;
+  const visibleTimeline = timeline.filter(inDateRange);
+  const visibleExercises = exerciseTimeline.filter(entry =>
+    inDateRange(entry) && (exerciseCategory === 'all' || entry.category === exerciseCategory));
+  const visibleActivity = activityTimeline.filter(inDateRange);
+  const exerciseCategories = Array.from(new Set(exerciseTimeline.map(entry => entry.category))).sort();
 
   if (loading) {
     return (
@@ -89,29 +99,51 @@ export const Dashboard: React.FC<Props> = ({ user }) => {
       </div>
 
       {/* ── Charts ──────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <label htmlFor="chart-start-date" className="text-sm text-slate-300">Show graphs from</label>
+        <input
+          id="chart-start-date"
+          type="date"
+          value={startDate}
+          onChange={event => setStartDate(event.target.value)}
+          className="min-h-11 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white [color-scheme:dark]"
+        />
+        <button type="button" onClick={() => setStartDate('')} disabled={!startDate}
+          className="min-h-11 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50">
+          All time
+        </button>
+      </div>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
           <h2 className="font-semibold text-white mb-1">Score & conversation length</h2>
           <p className="mb-4 text-xs text-slate-500">Score per conversation, with written words as bars.</p>
-          {timeline.length > 0
-            ? <ProgressChart timeline={timeline} />
-            : <EmptyChart label="No completed conversations yet" />}
+          {visibleTimeline.length > 0
+            ? <ProgressChart timeline={visibleTimeline} series={conversationSeries} />
+            : <EmptyChart label="No conversations in this date range" />}
+          <ChartLegend label="Conversation data" value={conversationSeries}
+            onChange={value => setConversationSeries(value as typeof conversationSeries)}
+            options={[["words", "Words", "#14b8a6"], ["score", "Score", "#3b82f6"]]} />
         </div>
 
         <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
           <h2 className="font-semibold text-white mb-1">Exercise scores</h2>
           <p className="mb-4 text-xs text-slate-500">Average score per day and error category.</p>
-          {exerciseTimeline.length > 0
-            ? <ExerciseScoreChart entries={exerciseTimeline} />
-            : <EmptyChart label="No completed exercises yet" />}
+          {visibleExercises.length > 0
+            ? <ExerciseScoreChart entries={visibleExercises} />
+            : <EmptyChart label="No exercises for this category and date range" />}
+          <ChartLegend label="Exercise category" value={exerciseCategory} onChange={setExerciseCategory}
+            options={exerciseCategories.map(category => [category, ERROR_CATEGORY_LABELS[category] || category, ERROR_CATEGORY_COLORS[category] || '#94a3b8'])} />
         </div>
 
         <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
           <h2 className="font-semibold text-white mb-1">Activity</h2>
           <p className="mb-4 text-xs text-slate-500">Conversations, exercises, and studied card sets per day.</p>
-          {activityTimeline.length > 0
-            ? <ActivityChart entries={activityTimeline} />
-            : <EmptyChart label="No activity data yet" />}
+          {visibleActivity.length > 0
+            ? <ActivityChart entries={visibleActivity} series={activitySeries} />
+            : <EmptyChart label="No activity in this date range" />}
+          <ChartLegend label="Activity data" value={activitySeries}
+            onChange={value => setActivitySeries(value as typeof activitySeries)}
+            options={[["conversations", "Conversations", "#38bdf8"], ["exercises", "Exercises", "#a78bfa"], ["flashcardSets", "Card sets", "#fb923c"]]} />
         </div>
       </div>
 
@@ -189,3 +221,27 @@ const ErrorCategoryDetail: React.FC<{ stats: ErrorStats[] }> = ({ stats }) => {
     </div>
   );
 };
+
+
+const ChartLegend: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: [string, string, string][];
+}> = ({ label, value, onChange, options }) => (
+  <div role="group" aria-label={label} className="mt-2 flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5">
+    <button type="button" aria-pressed={value === 'all'} onClick={() => onChange('all')}
+      className={`whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] leading-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 ${value === 'all' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}>
+      All
+    </button>
+    {options.map(([key, text, color]) => (
+      <button key={key} type="button" aria-pressed={value === 'all' || value === key}
+        title={value === key ? 'Show all data' : `Show only ${text.toLowerCase()}`}
+        onClick={() => onChange(value === key ? 'all' : key)}
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] leading-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 ${value === key ? 'bg-slate-700 text-white' : value === 'all' ? 'text-slate-300 hover:bg-slate-700/50' : 'text-slate-500 hover:bg-slate-700/50'}`}>
+        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color, opacity: value === 'all' || value === key ? 1 : 0.35 }} />
+        {text}
+      </button>
+    ))}
+  </div>
+);

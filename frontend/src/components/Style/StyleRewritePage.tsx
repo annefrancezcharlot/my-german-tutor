@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { ConversationSession, StyleRewriteItem, StyleRewriteMode, User } from '../../types';
-import { getSavedStyleRewrites, getUserSessions, rewriteSessionStyle } from '../../api';
+import type { ConversationSession, Message, StyleRewriteItem, StyleRewriteMode, User } from '../../types';
+import { getSavedStyleRewrites, getSessionMessages, getUserSessions, rewriteSessionStyle } from '../../api';
 import { clsx } from 'clsx';
 import {
   ArrowRight,
@@ -58,6 +58,9 @@ const speechModelByRewriteMode: Partial<Record<StyleRewriteMode, string>> = {
 export const StyleRewritePage: React.FC<Props> = ({ user }) => {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
   const [rewrites, setRewrites] = useState<StyleRewriteItem[]>([]);
   const [rewriteMode, setRewriteMode] = useState<StyleRewriteMode>('natural');
   const [swissDialect, setSwissDialect] = useState('Bern');
@@ -75,7 +78,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
       try {
         const loadedSessions = await getUserSessions();
         setSessions(loadedSessions);
-        setSelectedSessionId(loadedSessions[0]?.id ?? null);
+        setSelectedSessionId(null);
       } catch {
         setError('Sessions could not be loaded.');
       } finally {
@@ -85,6 +88,19 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
 
     loadSessions();
   }, [user.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMessages([]);
+    setMessageError(null);
+    if (selectedSessionId === null) return;
+    setLoadingMessages(true);
+    getSessionMessages(selectedSessionId)
+      .then(result => { if (!cancelled) setMessages(result); })
+      .catch(() => { if (!cancelled) setMessageError('The conversation could not be loaded. Please try another session or reload the page.'); })
+      .finally(() => { if (!cancelled) setLoadingMessages(false); });
+    return () => { cancelled = true; };
+  }, [selectedSessionId, user.id]);
 
   const selectedSession = useMemo(
     () => sessions.find(session => session.id === selectedSessionId) ?? null,
@@ -99,7 +115,9 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
       return;
     }
 
+    let cancelled = false;
     const loadSavedRewrites = async () => {
+      setRewrites([]);
       setLoadingSaved(true);
       setRewriteRequested(false);
       setError(null);
@@ -109,15 +127,16 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
           rewriteMode,
           selectedSwissDialect,
         );
-        setRewrites(response.rewrites);
+        if (!cancelled) setRewrites(response.rewrites);
       } catch {
-        setError('Saved style rewrites could not be loaded.');
+        if (!cancelled) setError('Saved style rewrites could not be loaded.');
       } finally {
-        setLoadingSaved(false);
+        if (!cancelled) setLoadingSaved(false);
       }
     };
 
     loadSavedRewrites();
+    return () => { cancelled = true; };
   }, [selectedSessionId, rewriteMode, selectedSwissDialect, user.id]);
 
   const handleRewrite = async () => {
@@ -193,7 +212,10 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
                 return (
                   <button
                     key={session.id}
+                    disabled={rewriting}
+                    aria-pressed={active}
                     onClick={() => {
+                      if (active) return;
                       setSelectedSessionId(session.id);
                       setRewrites([]);
                       setRewriteRequested(false);
@@ -224,129 +246,107 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
           )}
         </aside>
 
-        <section className="space-y-4">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-white font-semibold">
-                  <MessageSquareText size={17} className="text-cyan-300" />
-                  {selectedSession ? selectedSession.topic : 'No session selected'}
+        <section className="min-w-0 space-y-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4">
+              <fieldset className="min-w-0">
+                <legend className="mb-2 text-sm font-medium text-slate-300">Style</legend>
+                <div className="flex flex-wrap gap-2">
+                  {rewriteModes.map(mode => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => setRewriteMode(mode.value)}
+                      disabled={rewriting}
+                      aria-pressed={rewriteMode === mode.value}
+                      className={clsx(
+                        'rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50',
+                        rewriteMode === mode.value
+                          ? 'bg-cyan-500/20 text-cyan-200'
+                          : 'bg-slate-900 text-slate-400 hover:bg-slate-700 hover:text-white',
+                      )}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
                 </div>
-                {selectedSession && (
-                  <div className="text-xs text-slate-400 mt-1">
-                    {selectedSession.topic_category} · {formatDate(selectedSession.started_at)}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <div className="mb-1 px-1 text-xs font-semibold uppercase text-slate-500">
-                    Style
-                  </div>
-                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl p-1">
-                    {rewriteModes.map(mode => (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        onClick={() => setRewriteMode(mode.value)}
-                        disabled={rewriting}
-                        className={clsx(
-                          'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
-                          rewriteMode === mode.value
-                            ? 'bg-cyan-500/20 text-cyan-200'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800',
-                        )}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
+              </fieldset>
+              <fieldset className="col-span-2 min-w-0">
+                <legend className="mb-2 text-sm font-medium text-slate-300">Swiss German</legend>
+                <div className="flex flex-wrap gap-2">
+                  {swissDialects.map(dialect => (
+                    <button
+                      key={dialect}
+                      type="button"
+                      onClick={() => { setRewriteMode('swiss_german'); setSwissDialect(dialect); }}
+                      disabled={rewriting}
+                      aria-pressed={swissDialectSelected && swissDialect === dialect}
+                      className={clsx(
+                        'rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50',
+                        swissDialectSelected && swissDialect === dialect
+                          ? 'bg-cyan-500/20 text-cyan-200'
+                          : 'bg-slate-900 text-slate-400 hover:bg-slate-700 hover:text-white',
+                      )}
+                    >
+                      {dialect}
+                    </button>
+                  ))}
                 </div>
-
-                <div>
-                  <div className="mb-1 px-1 text-xs font-semibold uppercase text-slate-500">
-                    Swiss German
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl p-1">
-                    {swissDialects.map(dialect => (
-                      <button
-                        key={dialect}
-                        type="button"
-                        onClick={() => {
-                          setRewriteMode('swiss_german');
-                          setSwissDialect(dialect);
-                        }}
-                        disabled={rewriting}
-                        className={clsx(
-                          'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
-                          rewriteMode === 'swiss_german' && swissDialect === dialect
-                            ? 'bg-cyan-500/20 text-cyan-200'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800',
-                        )}
-                      >
-                        {dialect}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
+              </fieldset>
               <button
                 onClick={handleRewrite}
-                disabled={!selectedSessionId || rewriting}
-                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 transition-colors"
+                disabled={!selectedSessionId || rewriting || loadingSaved}
+                className="col-start-2 row-start-1 flex min-h-11 self-start items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {rewriting
-                  ? <><Loader2 size={15} className="animate-spin" /> Rewriting...</>
-                  : <><Wand2 size={15} /> Improve style</>}
+                {rewriting ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
+                {rewriting ? 'Changing style…' : 'Change style'}
               </button>
             </div>
-
-            {error && (
-              <div className="mt-4 text-sm text-red-300 bg-red-950/40 border border-red-800 rounded-xl px-3 py-2">
-                {error}
-              </div>
-            )}
           </div>
 
-          {rewriting || loadingSaved ? (
-            <div className="bg-slate-800 rounded-2xl border border-slate-700 h-56 flex items-center justify-center text-slate-300">
-              <Loader2 size={22} className="animate-spin mr-2" />
-              {rewriting ? 'Rewriting phrases...' : 'Loading saved rewrites...'}
-            </div>
-          ) : rewrites.length > 0 ? (
-            <div className="space-y-3">
-              {rewrites.map((rewrite, index) => (
-                <RewriteRow
-                  key={`${rewrite.message_id}-${index}`}
-                  rewrite={rewrite}
-                  index={index}
-                  speakingText={speakingText}
-                  onSpeak={handleSpeak}
-                />
-              ))}
-            </div>
-          ) : rewriteRequested && !error ? (
-            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-10 text-center">
-              <Wand2 size={32} className="mx-auto mb-3 text-slate-500" />
-              <div className="text-white font-semibold mb-1">
-                No rewrite received
+          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+
+          {selectedSession && (
+            <section aria-label="Selected conversation" className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800">
+              <div className="border-b border-slate-700 px-5 py-4">
+                <h2 className="flex items-center gap-2 font-semibold text-white">
+                  <MessageSquareText size={17} className="shrink-0 text-slate-400" />
+                  {selectedSession.topic}
+                </h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  {selectedSession.topic_category} · {formatDate(selectedSession.started_at)}
+                </p>
               </div>
-              <p className="text-sm text-slate-400">
-                Claude did not return usable style suggestions for this session.
-              </p>
-            </div>
-          ) : (
-            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-10 text-center">
-              <Wand2 size={32} className="mx-auto mb-3 text-slate-500" />
-              <div className="text-white font-semibold mb-1">
-                Choose a session
+              <div className="space-y-4 p-5">
+                {(rewriting || loadingSaved) && (
+                  <p role="status" className="flex items-center gap-2 text-sm text-slate-400">
+                    <Loader2 size={16} className="animate-spin" />
+                    {rewriting ? 'Changing style…' : 'Loading saved rewrites…'}
+                  </p>
+                )}
+                {messageError && <p role="alert" className="text-sm text-red-300">{messageError}</p>}
+                {loadingMessages ? (
+                  <p role="status" className="text-sm text-slate-400">Loading conversation…</p>
+                ) : messages.length === 0 && !messageError ? (
+                  <p className="text-sm text-slate-400">This session has no messages yet.</p>
+                ) : messages.map((message, index) => {
+                  const rewrite = rewrites.find(item => item.message_id === message.id);
+                  return (
+                    <div key={message.id}>
+                      <p className="mb-2 text-xs font-semibold text-slate-400">{message.role === 'user' ? 'You' : 'Tutor'}</p>
+                      {rewrite ? (
+                        <RewriteRow rewrite={rewrite} index={index} speakingText={speakingText} onSpeak={handleSpeak} />
+                      ) : (
+                        <p className="whitespace-pre-wrap rounded-xl bg-slate-900/50 p-4 text-sm leading-relaxed text-slate-200">{message.corrected_content || message.content}</p>
+                      )}
+                    </div>
+                  );
+                })}
+                {rewriteRequested && !rewriting && rewrites.length === 0 && !error && (
+                  <p className="text-sm text-slate-400">No style suggestions were returned for this session.</p>
+                )}
               </div>
-              <p className="text-sm text-slate-400">
-                Then you can have your own sentences rewritten for style.
-              </p>
-            </div>
+            </section>
           )}
         </section>
       </div>

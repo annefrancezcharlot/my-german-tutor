@@ -1,10 +1,10 @@
 import React from 'react';
 import {
-  CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import type { ActivityTimelineEntry } from '../../types';
 
-interface Props { entries: ActivityTimelineEntry[]; }
+interface Props { entries: ActivityTimelineEntry[]; series?: 'all' | 'conversations' | 'exercises' | 'flashcardSets'; }
 
 const formatDay = (iso: string) =>
   new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
@@ -25,7 +25,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export const ActivityChart: React.FC<Props> = ({ entries }) => {
+export const ActivityChart: React.FC<Props> = ({ entries, series = 'all' }) => {
   const data = entries.map(entry => ({
     day: formatDay(entry.date),
     conversations: entry.conversations,
@@ -50,8 +50,8 @@ export const ActivityChart: React.FC<Props> = ({ entries }) => {
           tickLine={false}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Legend formatter={value => <span className="text-xs text-slate-300">{value}</span>} />
-        <Line
+
+        {(series === 'all' || series === 'conversations') && <Line
           type="monotone"
           dataKey="conversations"
           name="Conversations"
@@ -59,8 +59,8 @@ export const ActivityChart: React.FC<Props> = ({ entries }) => {
           strokeWidth={2}
           dot={{ r: 3 }}
           activeDot={{ r: 5 }}
-        />
-        <Line
+        />}
+        {(series === 'all' || series === 'exercises') && <Line
           type="monotone"
           dataKey="exercises"
           name="Exercises"
@@ -68,8 +68,8 @@ export const ActivityChart: React.FC<Props> = ({ entries }) => {
           strokeWidth={2}
           dot={{ r: 3 }}
           activeDot={{ r: 5 }}
-        />
-        <Line
+        />}
+        {(series === 'all' || series === 'flashcardSets') && <Line
           type="monotone"
           dataKey="flashcardSets"
           name="Card sets"
@@ -77,7 +77,7 @@ export const ActivityChart: React.FC<Props> = ({ entries }) => {
           strokeWidth={2}
           dot={{ r: 3 }}
           activeDot={{ r: 5 }}
-        />
+        />}
       </LineChart>
     </ResponsiveContainer>
   );

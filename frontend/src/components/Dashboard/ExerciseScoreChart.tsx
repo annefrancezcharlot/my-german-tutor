@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import type { ExerciseTimelineEntry } from '../../types';
 import { ERROR_CATEGORY_COLORS, ERROR_CATEGORY_LABELS } from '../../types';
@@ -33,7 +33,7 @@ export const ExerciseScoreChart: React.FC<Props> = ({ entries }) => {
   const grouped = new Map<string, Record<string, number | string>>();
 
   entries.forEach(entry => {
-    const day = formatDay(entry.date);
+    const day = entry.date.slice(0, 10);
     const countKey = `${entry.category}_count`;
     const row = grouped.get(day) ?? { day };
     row[entry.category] = Number(row[entry.category] ?? 0) + entry.score;
@@ -59,6 +59,7 @@ export const ExerciseScoreChart: React.FC<Props> = ({ entries }) => {
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
         <XAxis
           dataKey="day"
+          tickFormatter={formatDay}
           tick={{ fill: '#94a3b8', fontSize: 11 }}
           axisLine={{ stroke: '#475569' }}
           tickLine={false}
@@ -70,7 +71,7 @@ export const ExerciseScoreChart: React.FC<Props> = ({ entries }) => {
           tickLine={false}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Legend formatter={value => <span className="text-xs text-slate-300">{ERROR_CATEGORY_LABELS[String(value)] ?? value}</span>} />
+
         {categories.map(category => (
           <Line
             key={category}
