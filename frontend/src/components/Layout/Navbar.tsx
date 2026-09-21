@@ -19,6 +19,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
     { to: '/exercises', label: 'Exercises',    icon: <BookOpen size={18} />     },
     { to: '/style',     label: 'Style',        icon: <Wand2 size={18} />        },
     { to: '/flashcards', label: 'Flashcards',   icon: <BookMarked size={18} />   },
+    { to: '/der-die-das', label: 'Der Die Das', icon: <BookOpen size={18} />     },
     { to: '/resources', label: 'Resources',     icon: <Library size={18} />      },
     { to: '/teacher',   label: 'Ask teacher',   icon: <GraduationCap size={18} /> },
     { to: '/dashboard', label: 'Dashboard',     icon: <BarChart2 size={18} />    },
@@ -41,7 +42,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
   }, [menuOpen]);
 
   const linkClass = (to: string) => clsx(
-    'flex items-center gap-2 rounded-lg text-sm font-medium transition-colors',
+    'flex items-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors',
     location.pathname.startsWith(to)
       ? 'bg-blue-600 text-white'
       : 'text-slate-300 hover:bg-slate-700 hover:text-white',
@@ -50,13 +51,15 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-700 bg-slate-800">
       <div className="mx-auto max-w-6xl px-3 sm:px-4">
-        <div className="flex h-14 items-center justify-between gap-3 md:h-auto md:py-3">
+        <div className="flex h-14 items-center justify-between gap-3 lg:h-auto lg:py-3">
           <Link to="/topics" className="flex items-center gap-2">
             <GraduationCap size={22} className="shrink-0 text-blue-300 sm:h-6 sm:w-6" />
             <span className="truncate text-base font-bold text-white sm:text-xl">My German Tutor</span>
           </Link>
 
-          <div className="hidden items-center gap-3 md:flex">
+          <div className="hidden items-center gap-3 lg:flex">
+            <GlobalTranslator />
+            <div aria-hidden="true" className="h-6 w-px bg-slate-700" />
             <Link to="/profile" className="hidden rounded-lg px-2 py-1 text-right transition-colors hover:bg-slate-700 sm:block">
               <div className="text-sm font-medium text-white">{user.username}</div>
               <div className="text-xs text-blue-400 font-bold">{user.level}</div>
@@ -72,7 +75,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
           <button
             type="button"
             onClick={() => setMenuOpen(open => !open)}
-            className="rounded-lg p-2 text-slate-200 hover:bg-slate-700 md:hidden"
+            className="rounded-lg p-2 text-slate-200 hover:bg-slate-700 lg:hidden"
             aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={menuOpen}
             aria-controls="mobile-navigation"
@@ -81,18 +84,18 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
           </button>
         </div>
 
-        <div className="hidden flex-wrap items-center gap-1 pb-3 md:flex">
+        <div className="hidden items-center gap-1 border-t border-slate-700/60 py-2 lg:flex">
           {navLinks.map(link => (
             <Link
               key={link.to}
               to={link.to}
-              className={clsx(linkClass(link.to), 'px-4 py-2')}
+              aria-current={location.pathname.startsWith(link.to) ? 'page' : undefined}
+              className={clsx(linkClass(link.to), 'min-h-11 flex-1 justify-center px-3 py-2')}
             >
-              {link.icon}
+              <span className="hidden xl:inline-flex">{link.icon}</span>
               {link.label}
             </Link>
           ))}
-          <GlobalTranslator />
         </div>
       </div>
 
@@ -102,11 +105,11 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
             type="button"
             aria-label="Close navigation menu"
             onClick={() => setMenuOpen(false)}
-            className="fixed inset-0 top-14 z-40 bg-slate-950/65 md:hidden"
+            className="fixed inset-0 top-14 z-40 bg-slate-950/65 lg:hidden"
           />
           <div
             id="mobile-navigation"
-            className="absolute left-0 right-0 top-14 z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-slate-700 bg-slate-800 p-3 shadow-2xl md:hidden"
+            className="absolute left-0 right-0 top-14 z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-slate-700 bg-slate-800 p-3 shadow-2xl lg:hidden"
           >
             <div className="mb-3 flex items-center justify-between rounded-xl bg-slate-900 px-3 py-2.5">
               <Link to="/profile" className="min-w-0">
@@ -123,12 +126,14 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
             </div>
             <div className="grid grid-cols-2 gap-2">
               {navLinks.map(link => (
-                <Link key={link.to} to={link.to} className={clsx(linkClass(link.to), 'min-h-11 px-3 py-2.5')}>
+                <Link key={link.to} to={link.to} aria-current={location.pathname.startsWith(link.to) ? 'page' : undefined} className={clsx(linkClass(link.to), 'min-h-11 px-3 py-2.5')}>
                   {link.icon}
                   <span className="truncate">{link.label}</span>
                 </Link>
               ))}
-              <GlobalTranslator fullWidth />
+              <div className="col-span-2 mt-1 border-t border-slate-700 pt-2">
+                <GlobalTranslator fullWidth />
+              </div>
             </div>
           </div>
         </>

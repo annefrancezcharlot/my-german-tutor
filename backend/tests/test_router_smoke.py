@@ -1854,3 +1854,43 @@ def test_incomplete_review_can_recover(client, db_session, user, seeded_session,
     assert seeded_session.summary == 'Completed assessment'
     assert seeded_session.review_error is None
     assert client.get(f'/chat/session/{seeded_session.id}/review').json()['status'] == 'ready'
+
+
+@pytest.mark.parametrize('word', ['Band', '  bAnD  '])
+def test_noun_lookup_returns_all_stored_articles(client, db_session, word):
+    db_session.add_all([
+        models.NounLexicon(singular='Band', singular_normalized='band',
+                           gender='m', article='der', plural='Bände'),
+        models.NounLexicon(singular='Band', singular_normalized='band',
+                           gender='n', article='das', plural='Bänder'),
+        models.NounLexicon(singular='Bande', singular_normalized='bande',
+                           gender='f', article='die', plural='Banden'),
+    ])
+    db_session.commit()
+    response = client.get('/nouns/lookup', params={'word': word})
+    assert response.status_code == 200
+    assert response.json() == [
+        {'singular': 'Band', 'article': 'das', 'plural': 'Bänder'},
+        {'singular': 'Band', 'article': 'der', 'plural': 'Bände'},
+    ]
+
+
+def test_noun_lookup_handles_german_casefold(client, db_session):
+    db_session.add(models.NounLexicon(
+        singular='Straße', singular_normalized='strasse', gender='f', article='die', plural=None,
+    ))
+    db_session.commit()
+    assert client.get('/nouns/lookup', params={'word': 'STRAẞE'}).json() == [
+        {'singular': 'Straße', 'article': 'die', 'plural': None},
+    ]
+
+
+def test_noun_lookup_unknown_and_invalid_input(client):
+    assert client.get('/nouns/lookup', params={'word': 'unknown'}).json() == []
+    for word in ['', '   ', 'x' * 201]:
+        assert client.get('/nouns/lookup', params={'word': word}).status_code == 422
+
+
+def test_noun_lookup_requires_authentication():
+    with TestClient(app) as unauthenticated:
+        assert unauthenticated.get('/nouns/lookup', params={'word': 'Haus'}).status_code == 403

@@ -26,6 +26,15 @@ const authApi = axios.create({
   baseURL: apiBaseUrl,
 });
 
+export interface NounResult {
+  singular: string;
+  article: string;
+  plural: string | null;
+}
+
+export const lookupNoun = (word: string): Promise<NounResult[]> =>
+  api.get('/nouns/lookup', { params: { word } }).then(r => r.data);
+
 let authTokenProvider: (() => Promise<string | null>) | null = null;
 
 export const setAuthTokenProvider = (provider: () => Promise<string | null>) => {

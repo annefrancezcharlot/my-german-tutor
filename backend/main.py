@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from database import engine
 from logging_config import configure_logging
-from routers import audio, auth, chat, sessions, errors, exercises, users, flashcards, resources, teacher, translate
+from routers import audio, auth, chat, sessions, errors, exercises, users, flashcards, resources, teacher, translate, nouns
 
 configure_logging()
 
@@ -40,6 +40,7 @@ app.include_router(resources.router)
 app.include_router(teacher.router)
 app.include_router(translate.router)
 app.include_router(audio.router)
+app.include_router(nouns.router)
 
 
 @app.get("/health")
