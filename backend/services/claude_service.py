@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -149,12 +150,15 @@ Every item must be linguistically correct, unambiguous, and have exactly the dec
 Use a neutral exercise title that does not reveal a required word, form, case-preposition combination,
 auxiliary, answer, or grammatical subtype being tested.
 Always return valid JSON matching the requested structure exactly.
-Always use ss instead of ß, and use ä, ö, ü instead of ae, oe, ue."""
+Always use ss instead of ß, and use ä, ö, ü instead of ae, oe, ue.
+Write the title, instructions and any labels (such as error_type) in German, kept simple enough for the
+supplied CEFR level. Labels and instructions may name the general skill but must never reveal the answer."""
 
 EXERCISE_REVIEW_SYSTEM_PROMPT = """You are a meticulous Swiss Standard German examiner.
 Proofread generated German exercises before learners see them. Correct every grammatical or
-answer-key inconsistency while preserving the requested exercise structure. Always use ss instead
-of ß and return only the complete corrected JSON exercise."""
+answer-key inconsistency while preserving the requested exercise structure, CEFR level and learning
+target. Always use ss instead of ß, and use ä, ö, ü instead of ae, oe, ue. Return only the complete
+corrected JSON exercise."""
 
 STYLE_MODE_INSTRUCTIONS = {
     "minimal": (
@@ -193,12 +197,13 @@ EXERCISE_TYPE_INSTRUCTIONS = {
 }
 
 Rules for guided verb fills:
-- Generate exactly five items with ids 1 through 5.
+- Generate exactly {item_count} items with ids 1 through {item_count}.
+- Use a plain German tense or mood label for tense (for example Präsens, Perfekt, Präteritum, Futur I, Konjunktiv II, Imperativ).
 - Supply only verb and tense as task information. Do not add a person field or any other hint.
 - Each sentence has exactly one ___ and exactly one possible verb form for the stated verb and tense.
 - Make the grammatical subject explicit. Add compatible time context when useful.
 - The answer_key must contain exactly the text that replaces ___, and must never repeat verb parts already visible in the sentence.
-- Normally blank only the finite verb. In compound tenses, keep the participle or infinitive visible and blank the finite auxiliary. For separable verbs, keep the particle visible and blank the finite verb stem.
+- Normally blank only the finite verb. In compound tenses, keep the participle or infinitive visible and blank the finite auxiliary. For separable verbs in main clauses, keep the particle visible and blank the finite verb stem; in subordinate clauses (verb-final) the particle is attached, so blank the whole finite verb.
 - Use the same blanking approach throughout the exercise so the expected input is predictable.
 - Do not test vocabulary choice. The supplied infinitive must be the only intended verb.
 - accepted answers contain only genuinely correct variants.""",
@@ -221,7 +226,7 @@ Rules for guided verb fills:
 }
 
 Rules for case fills:
-- Generate exactly five items with ids 1 through 5.
+- Generate exactly {item_count} items with ids 1 through {item_count}.
 - The learner must infer the case from context. Never reveal it in metadata, title, instructions, hints or annotations. Do not include a case field.
 - Test ONLY the missing definite article (der, die, das, den, dem, des). Always use article_only, never full_phrase or noun-only gaps.
 - Supply the nominative base noun with its definite article as word, indicating plural if needed.
@@ -246,8 +251,10 @@ Rules for case fills:
 }
 
 Rules for correction exercises:
-- Generate exactly five items with ids 1 through 5.
+- Generate exactly {item_count} items with ids 1 through {item_count}.
 - Each sentence contains one deliberate error belonging to the requested concrete grammar or word-order rule.
+- text is the erroneous sentence and must differ from every accepted correction. It must not contain a blank (___).
+- error_type is a short, general German label (for example "Wortstellung", "Kasus") shown to the learner; it must not state the correction.
 - Put corrected sentences only in answer_key; never append explanations.
 - Keep corrections minimal and include genuinely equivalent corrections as accepted variants.
 - Do not create an item if several unrelated rewrites would be equally natural.""",
@@ -270,9 +277,11 @@ Rules for correction exercises:
 }
 
 Rules for multiple choice:
-- Generate exactly five items with ids 1 through 5.
+- Generate exactly {item_count} items with ids 1 through {item_count}.
 - Provide exactly four uniquely labelled options A), B), C), and D).
 - Exactly one option must be correct in the supplied context.
+- Each question is either a German sentence with exactly one ___ (options fill the gap) or a short German question. Prefer gap sentences for preposition and grammar items.
+- Do not try to balance the position of the correct option; it is shuffled afterwards.
 - For preposition exercises, test selection of the preposition itself. Case declension after a known preposition belongs in a case-fill exercise.
 - Distractors must be plausible but demonstrably incorrect.""",
 }
@@ -291,6 +300,47 @@ EXERCISE_CATEGORIES = [
     "style",
     "other",
 ]
+
+EXERCISE_ITEM_COUNT = 5
+
+EXERCISE_LEVEL_GUIDANCE = {
+    "A1": "Very short sentences (5-8 words), everyday words, present tense situations, no subordinate clauses.",
+    "A2": "Short sentences (6-10 words), familiar everyday vocabulary, at most one simple subordinate clause.",
+    "B1": "Sentences of 8-14 words, common topics (work, travel, plans), simple subordinate and relative clauses.",
+    "B2": "Sentences of 10-18 words, abstract and work topics, varied clause structures and connectors.",
+    "C1": "Natural, complex sentences with precise vocabulary, nominal style and idiomatic phrasing where fitting.",
+    "C2": "Sophisticated, nuanced sentences with rare vocabulary and stylistic variation, still unambiguous for the rule.",
+}
+
+ANSWER_KEY_FORMAT_NOTE = (
+    "answer_key format: fill_blank and correction map each id to a LIST of accepted answers "
+    '({"1": ["..."]}); multiple_choice maps each id to a single letter string ({"1": "A"}).'
+)
+EXERCISE_MAX_OUTPUT_TOKENS = 3200
+EXERCISE_REVIEW_MAX_OUTPUT_TOKENS = 3600
+VERB_FILL_CATEGORIES = {"verb_conjugation", "tense"}
+CASE_FILL_CATEGORIES = {"case"}
+
+
+def _exercise_instruction_key(exercise_type: str, error_category: str) -> str:
+    """Pick the EXERCISE_TYPE_INSTRUCTIONS key; the single place that routes fill_blank."""
+    if exercise_type == "fill_blank":
+        if error_category in VERB_FILL_CATEGORIES:
+            return "verb_fill"
+        if error_category in CASE_FILL_CATEGORIES:
+            return "case_fill"
+        raise ValueError(f"fill_blank is not supported for category {error_category}")
+    if exercise_type not in EXERCISE_TYPE_INSTRUCTIONS:
+        raise ValueError(f"unsupported exercise type {exercise_type}")
+    return exercise_type
+
+
+def _is_verb_fill(exercise_type: str, error_category: str) -> bool:
+    return exercise_type == "fill_blank" and error_category in VERB_FILL_CATEGORIES
+
+
+def _is_case_fill(exercise_type: str, error_category: str) -> bool:
+    return exercise_type == "fill_blank" and error_category in CASE_FILL_CATEGORIES
 
 
 def _build_session_summary_prompt(
@@ -626,13 +676,21 @@ def _build_exercise_prompt(
     avoid_sentences: Optional[List[str]] = None,
     validation_feedback: Optional[str] = None,
 ) -> str:
-    examples_text = json.dumps(example_errors[:5], ensure_ascii=False, indent=2)
-    if exercise_type == "fill_blank" and error_category in {"verb_conjugation", "tense"}:
-        type_instruction = EXERCISE_TYPE_INSTRUCTIONS["verb_fill"]
-    elif exercise_type == "fill_blank" and error_category == "case":
-        type_instruction = EXERCISE_TYPE_INSTRUCTIONS["case_fill"]
+    level_guidance = EXERCISE_LEVEL_GUIDANCE.get(
+        str(difficulty).upper(), "Keep vocabulary and sentence complexity appropriate for the level."
+    )
+    if example_errors:
+        examples_block = (
+            "The learner made these real mistakes (use them for inspiration, not verbatim):\n"
+            + json.dumps(example_errors[:5], ensure_ascii=False, indent=2)
+        )
     else:
-        type_instruction = EXERCISE_TYPE_INSTRUCTIONS[exercise_type]
+        examples_block = (
+            "No recorded learner mistakes are available; rely on the requested rule and focus."
+        )
+    type_instruction = EXERCISE_TYPE_INSTRUCTIONS[
+        _exercise_instruction_key(exercise_type, error_category)
+    ].replace("{item_count}", str(EXERCISE_ITEM_COUNT))
     topic_instruction = (
         f"\nRequested learner topic/focus: {exercise_topic.strip()}\n"
         "Make every item directly practice this requested focus. If the wording is informal "
@@ -682,13 +740,14 @@ the supplied learner evidence specifically requires them.
 
     return f"""Create a {difficulty}-level German exercise targeting: **{error_category}** (subcategories: {', '.join(subcategories) or 'general'}).
 {topic_instruction}
-The learner made these real mistakes (use them for inspiration, not verbatim):
-{examples_text}
-Generate 5 items. {type_instruction}
+{examples_block}
+Level guidance ({difficulty}): {level_guidance}
+{ANSWER_KEY_FORMAT_NOTE}
+{type_instruction}
 {variant_instruction}
 {context_instruction}
 {diversity_instruction}
-Title rule: use a broad neutral title such as "Verben im Kontext", "Präpositionen im Kontext",
+Title rule (German): use a broad neutral title such as "Verben im Kontext", "Präpositionen im Kontext",
 or "Welche Form passt?" Never put an expected answer or a revealing target such as "in + Akkusativ",
 "sein oder werden", or a required verb form in the title.
 {retry_instruction}
@@ -699,9 +758,18 @@ def _build_exercise_review_prompt(
     exercise_data: Dict[str, Any],
     error_category: str,
     exercise_variant: Optional[str],
+    difficulty: Optional[str] = None,
+    subcategories: Optional[List[str]] = None,
+    exercise_topic: Optional[str] = None,
 ) -> str:
-    return f"""Proofread this generated exercise for category {error_category}.
-Exercise variant: {exercise_variant or 'standard'}
+    topic_line = (
+        f"\nRequested learner topic/focus: {exercise_topic.strip()}"
+        if exercise_topic and exercise_topic.strip()
+        else ""
+    )
+    return f"""Proofread this generated exercise for category {error_category} (subcategories: {', '.join(subcategories or []) or 'general'}).
+CEFR level: {difficulty or 'unspecified'}. Keep the vocabulary and sentence complexity at this level.
+Exercise variant: {exercise_variant or 'standard'}{topic_line}
 
 {json.dumps(exercise_data, ensure_ascii=False, indent=2)}
 
@@ -715,9 +783,10 @@ Verification procedure:
 5. For multiple choice, substitute the option named by answer_key and confirm it is the only correct option in context.
 6. For Zustandspassiv versus Vorgangspassiv, distinguish a state/result with sein from an action/process with werden; do not expose the required type as a hint.
 7. For case items, infer the case without revealing it anywhere. Require article_only: every answer is one definite article and the correctly declined noun remains immediately after the gap. Substitute every accepted answer literally; repair duplicated articles/nouns or missing nouns. Never use full-phrase or noun-only gaps.
-8. Preserve exactly five numbered items, one clear answer per context, Swiss spelling, and the original grammatical learning target.
-9. Ensure the title is neutral: it must not reveal any correct option, required word or form, case-preposition combination, auxiliary, or passive subtype.
-10. Preserve the varied contexts unless a grammatical correction requires changing them."""
+8. Preserve exactly {EXERCISE_ITEM_COUNT} numbered items, one clear answer per context, Swiss spelling, and the original grammatical learning target.
+9. Ensure the title is neutral and in German: it must not reveal any correct option, required word or form, case-preposition combination, auxiliary, or passive subtype.
+10. Preserve the varied contexts unless a grammatical correction requires changing them.
+11. For correction items, the text must still contain exactly the deliberate error and differ from every accepted correction; error_type must not state the fix."""
 
 
 def _extract_json_object(raw_text: str) -> str:
@@ -1832,6 +1901,12 @@ Requested focus:
 Existing categories:
 {categories_text}
 
+Category guidance:
+- case: only choosing the declined definite article (der/den/dem/des) of a noun.
+- preposition: choosing the preposition itself, including which preposition governs which case.
+- grammar: everything else about forms and structure, including adjective endings, passive, relative clauses and subjunctive.
+- verb_conjugation / tense: verb forms and tenses.
+
 Return ONLY valid JSON in this exact format:
 {{
   "category": "<one existing category>",
@@ -1840,8 +1915,9 @@ Return ONLY valid JSON in this exact format:
 
 Examples:
 - "conjugation with you plural" -> {{"category": "verb_conjugation", "subcategory": "ihr conjugation"}}
-- "dative after prepositions" -> {{"category": "preposition", "subcategory": "Dativprepositionen"}}
-- "adjective endings in accusative" -> {{"category": "case", "subcategory": "Adjektivdeklination im Akkusativ"}}"""
+- "dative prepositions" -> {{"category": "preposition", "subcategory": "Dativprepositionen"}}
+- "dative articles after mit and bei" -> {{"category": "case", "subcategory": "Dativ nach Präpositionen"}}
+- "adjective endings in accusative" -> {{"category": "grammar", "subcategory": "Adjektivdeklination im Akkusativ"}}"""
 
     response = client.messages.create(
         model=MODEL,
@@ -1918,7 +1994,12 @@ def _validate_standard_exercise(
                 item["id"] = int(item["id"])
             if isinstance(item.get("text"), str):
                 item["text"] = re.sub(r"_{3,}", "___", item["text"])
-            if error_category in {"verb_conjugation", "tense"}:
+            if _is_case_fill(exercise_type, error_category):
+                # Same leniency as verb items: drop hints that would reveal the case.
+                for stray in ("case", "kasus", "hint", "focus"):
+                    item.pop(stray, None)
+                item["answer_scope"] = "article_only"
+            if _is_verb_fill(exercise_type, error_category):
                 if not item.get("verb"):
                     for alias in ("infinitive", "infinitiv", "base_verb"):
                         if item.get(alias):
@@ -1933,18 +2014,18 @@ def _validate_standard_exercise(
                 item.pop("hint", None)
                 item.pop("focus", None)
 
-    expected_keys = {str(index) for index in range(1, 6)}
+    expected_keys = {str(index) for index in range(1, EXERCISE_ITEM_COUNT + 1)}
     if set(answer_key) != expected_keys:
-        errors.append("answer_key must contain exactly ids 1 through 5")
+        errors.append(f"answer_key must contain exactly ids 1 through {EXERCISE_ITEM_COUNT}")
 
     if exercise_type in {"fill_blank", "correction"}:
         items = content.get("sentences")
-        if not isinstance(items, list) or len(items) != 5:
-            errors.append("content.sentences must contain exactly five items")
+        if not isinstance(items, list) or len(items) != EXERCISE_ITEM_COUNT:
+            errors.append(f"content.sentences must contain exactly {EXERCISE_ITEM_COUNT} items")
             items = items if isinstance(items, list) else []
         ids = [item.get("id") for item in items if isinstance(item, dict)]
-        if ids != list(range(1, 6)):
-            errors.append("sentence ids must be ordered from 1 through 5")
+        if ids != list(range(1, EXERCISE_ITEM_COUNT + 1)):
+            errors.append(f"sentence ids must be ordered from 1 through {EXERCISE_ITEM_COUNT}")
         for index, item in enumerate(items, start=1):
             if not isinstance(item, dict):
                 continue
@@ -1953,7 +2034,7 @@ def _validate_standard_exercise(
                 errors.append(f"item {index} needs sentence text")
             if exercise_type == "fill_blank" and str(sentence_text).count("___") != 1:
                 errors.append(f"item {index} must contain exactly one blank")
-            if exercise_type == "fill_blank" and error_category in {"verb_conjugation", "tense"}:
+            if _is_verb_fill(exercise_type, error_category):
                 for field in ("verb", "tense"):
                     if not isinstance(item.get(field), str) or not item[field].strip():
                         errors.append(f"verb item {index} needs {field}")
@@ -1976,14 +2057,23 @@ def _validate_standard_exercise(
                             f"verb item {index} already contains part of its complete answer"
                         )
                         break
-            if exercise_type == "fill_blank" and error_category == "case":
+            if exercise_type == "correction":
+                if "___" in str(sentence_text):
+                    errors.append(f"correction item {index} must not contain a blank")
+                if not isinstance(item.get("error_type"), str) or not item["error_type"].strip():
+                    errors.append(f"correction item {index} needs error_type")
+                corrections = answer_key.get(str(index))
+                correction_values = corrections if isinstance(corrections, list) else [corrections]
+                original = " ".join(str(sentence_text).split()).casefold()
+                if any(
+                    isinstance(value, str) and " ".join(value.split()).casefold() == original
+                    for value in correction_values
+                ):
+                    errors.append(f"correction item {index} answer equals the erroneous sentence")
+            if _is_case_fill(exercise_type, error_category):
                 word = item.get("word")
                 if not isinstance(word, str) or not re.match(r"^(?:der|die|das)\s+", word.strip(), re.IGNORECASE):
                     errors.append(f"case item {index} word must include its base definite article")
-                if "case" in item:
-                    errors.append(f"case item {index} must not reveal the required case")
-                if item.get("answer_scope") != "article_only":
-                    errors.append(f"case item {index} must use article_only")
                 answer = answer_key.get(str(index))
                 values = answer if isinstance(answer, list) else [answer]
                 articles = {"der", "die", "das", "den", "dem", "des"}
@@ -1998,7 +2088,9 @@ def _validate_standard_exercise(
                 if noun_match and isinstance(word, str) and word.strip():
                     base_words = re.sub(r"\s*\([^)]*\)", "", word).split()
                     base = base_words[-1].casefold() if base_words else ""
-                    if noun_match.group(1).casefold() not in {base, base + "n", base + "en", base + "s", base + "es"}:
+                    if noun_match.group(1).casefold() not in {
+                        base, base + "n", base + "en", base + "ns", base + "s", base + "es",
+                    }:
                         errors.append(f"case item {index} visible noun does not match the supplied word")
         for item_id, answer in answer_key.items():
             values = answer if isinstance(answer, list) else [answer]
@@ -2009,12 +2101,12 @@ def _validate_standard_exercise(
 
     elif exercise_type == "multiple_choice":
         questions = content.get("questions")
-        if not isinstance(questions, list) or len(questions) != 5:
-            errors.append("content.questions must contain exactly five items")
+        if not isinstance(questions, list) or len(questions) != EXERCISE_ITEM_COUNT:
+            errors.append(f"content.questions must contain exactly {EXERCISE_ITEM_COUNT} items")
             questions = questions if isinstance(questions, list) else []
         ids = [item.get("id") for item in questions if isinstance(item, dict)]
-        if ids != list(range(1, 6)):
-            errors.append("question ids must be ordered from 1 through 5")
+        if ids != list(range(1, EXERCISE_ITEM_COUNT + 1)):
+            errors.append(f"question ids must be ordered from 1 through {EXERCISE_ITEM_COUNT}")
         expected_labels = ["A", "B", "C", "D"]
         for index, question in enumerate(questions, start=1):
             if not isinstance(question, dict):
@@ -2051,7 +2143,7 @@ def _validate_standard_exercise(
 
     title = data.get("title")
     declared_answers: List[Any] = []
-    if isinstance(title, str) and exercise_type == "fill_blank":
+    if isinstance(title, str) and exercise_type in {"fill_blank", "correction"}:
         for answer in answer_key.values():
             declared_answers.extend(answer if isinstance(answer, list) else [answer])
     elif isinstance(title, str) and exercise_type == "multiple_choice":
@@ -2083,6 +2175,27 @@ def _validate_standard_exercise(
     return data
 
 
+def _shuffle_multiple_choice(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Randomise option order (models favour B/C) and relabel A-D with a matching answer_key."""
+    questions = data.get("content", {}).get("questions", [])
+    answer_key = data.get("answer_key", {})
+    for question in questions:
+        options = [re.sub(r"^[A-D]\)\s*", "", option.strip()) for option in question["options"]]
+        correct_label = answer_key.get(str(question["id"]))
+        correct_index = "ABCD".index(correct_label)
+        order = list(range(len(options)))
+        random.shuffle(order)
+        question["options"] = [f"{'ABCD'[new]}) {options[old]}" for new, old in enumerate(order)]
+        answer_key[str(question["id"])] = "ABCD"[order.index(correct_index)]
+    return data
+
+
+def _exercise_response_text(response: Any) -> str:
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise ValueError("response was truncated; produce shorter contexts")
+    return response.content[0].text.strip()
+
+
 def generate_exercise(
     error_category: str,
     subcategories: List[str],
@@ -2111,12 +2224,12 @@ def generate_exercise(
         )
         response = client.messages.create(
             model=MODEL,
-            max_tokens=2200,
+            max_tokens=EXERCISE_MAX_OUTPUT_TOKENS,
             system=EXERCISE_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         try:
-            exercise_data = _load_jsonish_object(response.content[0].text.strip())
+            exercise_data = _load_jsonish_object(_exercise_response_text(response))
             validated_data = _validate_standard_exercise(
                 exercise_data,
                 exercise_type=exercise_type,
@@ -2125,7 +2238,7 @@ def generate_exercise(
             )
             review_response = client.messages.create(
                 model=MODEL,
-                max_tokens=2600,
+                max_tokens=EXERCISE_REVIEW_MAX_OUTPUT_TOKENS,
                 system=EXERCISE_REVIEW_SYSTEM_PROMPT,
                 messages=[{
                     "role": "user",
@@ -2133,16 +2246,22 @@ def generate_exercise(
                         validated_data,
                         error_category=error_category,
                         exercise_variant=exercise_variant,
+                        difficulty=difficulty,
+                        subcategories=subcategories,
+                        exercise_topic=exercise_topic,
                     ),
                 }],
             )
-            reviewed_data = _load_jsonish_object(review_response.content[0].text.strip())
-            return _validate_standard_exercise(
+            reviewed_data = _load_jsonish_object(_exercise_response_text(review_response))
+            final_data = _validate_standard_exercise(
                 reviewed_data,
                 exercise_type=exercise_type,
                 error_category=error_category,
                 exercise_variant=exercise_variant,
             )
+            if exercise_type == "multiple_choice":
+                final_data = _shuffle_multiple_choice(final_data)
+            return final_data
         except (json.JSONDecodeError, ValueError) as exc:
             validation_feedback = str(exc)
             if attempt == 2:

@@ -146,10 +146,18 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
       );
       setExercises(prev => dedupeExercises([...newEx, ...prev]));
       setActiveTab('pending');
-    } catch {
-      setGenerationError(
-        'No supported exercise could be created for this focus. Choose a listed category or a more specific grammar rule.',
-      );
+    } catch (err) {
+      const status = (err as { response?: { status?: number; data?: { detail?: unknown } } }).response?.status;
+      const detail = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      if (status === 422 && typeof detail === 'string') {
+        setGenerationError(detail);
+      } else if (status === 429) {
+        setGenerationError('You have generated a lot of exercises recently. Please wait a while and try again.');
+      } else if (status === 400 && typeof detail === 'string') {
+        setGenerationError(detail);
+      } else {
+        setGenerationError('Something went wrong while creating exercises. Please try again.');
+      }
     } finally {
       setGenerating(false);
     }
@@ -233,6 +241,10 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
             className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             maxLength={200}
           />
+          <p className="mt-1.5 text-xs text-slate-500">
+            Supported topics: grammar, word order, cases, gender, verb forms and tenses, and
+            prepositions. Spelling, punctuation and style are not available.
+          </p>
         </div>
 
         {/* Category chips */}

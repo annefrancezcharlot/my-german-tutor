@@ -1897,7 +1897,6 @@ def test_noun_lookup_requires_authentication():
 
 
 @pytest.mark.parametrize("changes,answer", [
-    ({"case": "Dativ"}, "die"),
     ({"answer_scope": "full_phrase"}, "die Aufgabe"),
     ({"text": "Ihr löst ___ heute."}, "Aufgabe"),
     ({"text": "Ihr löst die ___ Aufgabe."}, "die"),
@@ -1909,6 +1908,51 @@ def test_case_fill_rejects_inconsistent_gaps(changes, answer):
     payload["answer_key"]["1"] = [answer]
     with pytest.raises(ValueError, match="case item 1"):
         claude_service._validate_standard_exercise(payload, "fill_blank", "case")
+
+
+def test_case_fill_cleans_revealing_metadata():
+    payload = _guided_fill_payload("case")
+    payload["content"]["sentences"][0].update({"case": "Dativ", "answer_scope": "full_phrase"})
+    validated = claude_service._validate_standard_exercise(payload, "fill_blank", "case")
+    cleaned = validated["content"]["sentences"][0]
+    assert "case" not in cleaned
+    assert cleaned["answer_scope"] == "article_only"
+
+
+def test_fill_blank_rejects_unsupported_category():
+    with pytest.raises(ValueError, match="not supported"):
+        claude_service._exercise_instruction_key("fill_blank", "preposition")
+
+
+def test_correction_validation_rejects_unchanged_sentence():
+    items = [
+        {"id": i, "text": f"Er hat gestern ein Buch gelesen {i}.", "error_type": "Wortstellung"}
+        for i in range(1, 6)
+    ]
+    payload = {
+        "exercise_type": "correction",
+        "title": "Sätze verbessern",
+        "instructions": "Verbessere die Sätze.",
+        "content": {"sentences": items},
+        "answer_key": {str(i): [f"Gestern hat er ein Buch gelesen {i}."] for i in range(1, 6)},
+    }
+    claude_service._validate_standard_exercise(payload, "correction", "word_order")
+    payload["answer_key"]["1"] = [items[0]["text"]]
+    with pytest.raises(ValueError, match="equals the erroneous sentence"):
+        claude_service._validate_standard_exercise(payload, "correction", "word_order")
+
+
+def test_multiple_choice_shuffle_keeps_correct_answer():
+    questions = [
+        {"id": i, "question": f"Sie wohnt ___ Bern {i}.", "options": ["A) in", "B) auf", "C) an", "D) zu"]}
+        for i in range(1, 6)
+    ]
+    data = {"content": {"questions": questions}, "answer_key": {str(i): "A" for i in range(1, 6)}}
+    shuffled = claude_service._shuffle_multiple_choice(data)
+    for question in shuffled["content"]["questions"]:
+        label = shuffled["answer_key"][str(question["id"])]
+        assert [o[0] for o in question["options"]] == list("ABCD")
+        assert next(o for o in question["options"] if o.startswith(label)) == f"{label}) in"
 
 
 @pytest.mark.parametrize("word,text", [

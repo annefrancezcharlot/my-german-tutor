@@ -9,6 +9,7 @@ import schemas
 from auth import CurrentUser, get_current_user
 from database import get_db
 from services.exercise_engine import (
+    UnsupportedExerciseFocus,
     create_exercises_for_user,
     create_flashcard_vocabulary_cloze_exercises,
     score_exercise,
@@ -104,18 +105,25 @@ def generate_exercises(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    exercises = create_exercises_for_user(
-        db=db,
-        user_id=current_user.id,
-        user_level=user.level,
-        focus_categories=request.focus_categories,
-        exercise_topic=request.topic,
-        count=request.count,
-    )
+    try:
+        exercises = create_exercises_for_user(
+            db=db,
+            user_id=current_user.id,
+            user_level=user.level,
+            focus_categories=request.focus_categories,
+            exercise_topic=request.topic,
+            count=request.count,
+        )
+    except UnsupportedExerciseFocus:
+        raise HTTPException(
+            status_code=422,
+            detail="This topic is not supported. Exercises cover grammar, word order, cases, "
+            "gender, verb forms, tenses and prepositions.",
+        )
     if not exercises:
         raise HTTPException(
             status_code=400,
-            detail="No supported exercise could be created for this focus",
+            detail="No exercise could be created right now. Please try again or choose a different focus.",
         )
 
     return [_exercise_response(e) for e in exercises]

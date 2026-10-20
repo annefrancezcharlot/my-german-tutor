@@ -50,6 +50,10 @@ AUTO_EXERCISE_FALLBACK_CATEGORIES = [
 ]
 
 
+class UnsupportedExerciseFocus(ValueError):
+    """The requested topic maps to a category we do not generate exercises for."""
+
+
 def _exercise_category_family(category: str) -> str:
     return "verbs_tenses" if category in {"verb_conjugation", "tense"} else category
 
@@ -653,12 +657,12 @@ def create_exercises_for_user(
         try:
             topic_classification = classify_exercise_topic(topic_focus)
             classified_category = topic_classification["category"]
-            categories = (
-                [{"category": classified_category, "count": 0}]
-                if classified_category in SUPPORTED_GENERAL_CATEGORIES
-                else []
-            )
+            if classified_category not in SUPPORTED_GENERAL_CATEGORIES:
+                raise UnsupportedExerciseFocus(classified_category)
+            categories = [{"category": classified_category, "count": 0}]
             topic_subcategory = topic_classification.get("subcategory")
+        except UnsupportedExerciseFocus:
+            raise
         except Exception as e:
             logger.warning(
                 "exercise.topic_classification_failed user_id=%s topic_chars=%s error_type=%s",
