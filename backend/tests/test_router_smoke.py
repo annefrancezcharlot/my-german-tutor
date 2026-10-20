@@ -312,9 +312,9 @@ def _guided_fill_payload(category: str):
         }
         if category == "case":
             item.update({
-                "word": "die grosse Aufgabe",
-                "case": "Akkusativ",
-                "answer_scope": "full_phrase",
+                "word": "die Aufgabe",
+                "text": f"Ihr löst ___ Aufgabe {item_id}.",
+                "answer_scope": "article_only",
             })
         else:
             item.update({
@@ -327,7 +327,7 @@ def _guided_fill_payload(category: str):
         "title": "Große Übung",
         "instructions": "Füllt die Lücken aus.",
         "content": {"sentences": sentences},
-        "answer_key": {str(item_id): "löst" for item_id in range(1, 6)},
+        "answer_key": {str(item_id): "die" if category == "case" else "löst" for item_id in range(1, 6)},
     }
 
 
@@ -340,7 +340,7 @@ def test_guided_fill_validation_requires_metadata_and_enforces_swiss_spelling(ca
     )
 
     assert validated["title"] == "Grosse Übung"
-    assert validated["answer_key"]["1"] == ["löst"]
+    assert validated["answer_key"]["1"] == (["die"] if category == "case" else ["löst"])
 
 
 def test_guided_verb_validation_rejects_missing_tense():
@@ -1894,3 +1894,31 @@ def test_noun_lookup_unknown_and_invalid_input(client):
 def test_noun_lookup_requires_authentication():
     with TestClient(app) as unauthenticated:
         assert unauthenticated.get('/nouns/lookup', params={'word': 'Haus'}).status_code == 403
+
+
+@pytest.mark.parametrize("changes,answer", [
+    ({"case": "Dativ"}, "die"),
+    ({"answer_scope": "full_phrase"}, "die Aufgabe"),
+    ({"text": "Ihr löst ___ heute."}, "Aufgabe"),
+    ({"text": "Ihr löst die ___ Aufgabe."}, "die"),
+    ({"text": "Ihr löst ___ Bericht."}, "die"),
+])
+def test_case_fill_rejects_inconsistent_gaps(changes, answer):
+    payload = _guided_fill_payload("case")
+    payload["content"]["sentences"][0].update(changes)
+    payload["answer_key"]["1"] = [answer]
+    with pytest.raises(ValueError, match="case item 1"):
+        claude_service._validate_standard_exercise(payload, "fill_blank", "case")
+
+
+@pytest.mark.parametrize("word,text", [
+    ("der Experte", "Sie fragte ___ Experten nach seiner Meinung."),
+    ("die Länder (Plural)", "In ___ Ländern gelten andere Regeln."),
+    ("die Studierenden (Plural)", "Sie erklärte ___ Studierenden die Regel."),
+])
+def test_case_fill_accepts_visible_declined_noun(word, text):
+    payload = _guided_fill_payload("case")
+    payload["content"]["sentences"][0].update(word=word, text=text)
+    payload["answer_key"]["1"] = ["den"]
+    result = claude_service._validate_standard_exercise(payload, "fill_blank", "case")
+    assert result["answer_key"]["1"] == ["den"]

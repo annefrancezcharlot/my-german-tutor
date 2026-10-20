@@ -34,11 +34,6 @@ export const FillBlankExercise: React.FC<Props> = ({
                     Word: <strong>{s.word}</strong>
                   </span>
                 )}
-                {s.case && (
-                  <span className="rounded-lg border border-amber-700/60 bg-amber-900/30 px-2.5 py-1 text-amber-100">
-                    Case: <strong>{s.case}</strong>
-                  </span>
-                )}
                 {s.answer_scope && (
                   <span className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1 text-slate-200">
                     Enter: <strong>{s.answer_scope === 'article_only' ? 'article only' : 'complete phrase'}</strong>

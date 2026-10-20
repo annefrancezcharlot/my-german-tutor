@@ -213,21 +213,24 @@ Rules for guided verb fills:
         "id": 1,
         "text": "German sentence with exactly one ___ blank",
         "word": "nominative base phrase including its article",
-        "case": "Nominativ|Akkusativ|Dativ|Genitiv",
-        "answer_scope": "full_phrase|article_only"
+        "answer_scope": "article_only"
       }
     ]
   },
   "answer_key": {"1": ["accepted answer"], ...}
 }
 
-Rules for guided case fills:
+Rules for case fills:
 - Generate exactly five items with ids 1 through 5.
-- Show the base word or phrase with its article directly as task information.
-- Show the required grammatical case directly.
-- Use full_phrase by default and make the gap the complete declined phrase.
-- Use article_only only when the learner's source mistake specifically concerns the article; keep the noun visible in the sentence.
-- Every sentence must determine one clear answer. Avoid optional adjective endings, alternative contractions, and ambiguous noun readings.
+- The learner must infer the case from context. Never reveal it in metadata, title, instructions, hints or annotations. Do not include a case field.
+- Test ONLY the missing definite article (der, die, das, den, dem, des). Always use article_only, never full_phrase or noun-only gaps.
+- Supply the nominative base noun with its definite article as word, indicating plural if needed.
+- Keep the correctly declined noun immediately after the gap, with no intervening adjective. Do not leave an article before the gap.
+- Instructions must consistently ask for only the missing definite article.
+- Each context must determine one clear answer. Avoid ambiguous location/direction readings and optional contractions.
+- Substitute EVERY accepted answer literally into ___. Verify that the completed sentence is natural and grammatical, with no repeated article, repeated noun or missing noun.
+- Example: word "der Experte", text "Sie fragte ___ Experten nach seiner Meinung.", answer "den".
+- INVALID: "In vielen anderen ___ gelten andere Regeln." with answer "Ländern". Instead use word "die Länder (Plural)", text "In ___ Ländern gelten andere Regeln.", answer "den".
 - accepted answers contain only genuinely correct variants.""",
     "correction": """Return JSON:
 {
@@ -711,7 +714,7 @@ Verification procedure:
 4. Check haben/sein selection, person and number agreement, separable particles, participles, modal constructions, passive auxiliaries, and word order.
 5. For multiple choice, substitute the option named by answer_key and confirm it is the only correct option in context.
 6. For Zustandspassiv versus Vorgangspassiv, distinguish a state/result with sein from an action/process with werden; do not expose the required type as a hint.
-7. For case items, verify article, adjective ending, noun form, required case, and answer scope.
+7. For case items, infer the case without revealing it anywhere. Require article_only: every answer is one definite article and the correctly declined noun remains immediately after the gap. Substitute every accepted answer literally; repair duplicated articles/nouns or missing nouns. Never use full-phrase or noun-only gaps.
 8. Preserve exactly five numbered items, one clear answer per context, Swiss spelling, and the original grammatical learning target.
 9. Ensure the title is neutral: it must not reveal any correct option, required word or form, case-preposition combination, auxiliary, or passive subtype.
 10. Preserve the varied contexts unless a grammatical correction requires changing them."""
@@ -1974,18 +1977,29 @@ def _validate_standard_exercise(
                         )
                         break
             if exercise_type == "fill_blank" and error_category == "case":
-                for field in ("word", "case"):
-                    if not isinstance(item.get(field), str) or not item[field].strip():
-                        errors.append(f"case item {index} needs {field}")
                 word = item.get("word")
-                if isinstance(word, str) and not re.match(
-                    r"^(?:der|die|das|ein|eine)\b",
-                    word.strip(),
-                    re.IGNORECASE,
-                ):
-                    errors.append(f"case item {index} word must include its base article")
-                if item.get("answer_scope") not in {"full_phrase", "article_only"}:
-                    errors.append(f"case item {index} needs a valid answer_scope")
+                if not isinstance(word, str) or not re.match(r"^(?:der|die|das)\s+", word.strip(), re.IGNORECASE):
+                    errors.append(f"case item {index} word must include its base definite article")
+                if "case" in item:
+                    errors.append(f"case item {index} must not reveal the required case")
+                if item.get("answer_scope") != "article_only":
+                    errors.append(f"case item {index} must use article_only")
+                answer = answer_key.get(str(index))
+                values = answer if isinstance(answer, list) else [answer]
+                articles = {"der", "die", "das", "den", "dem", "des"}
+                if any(not isinstance(value, str) or value.strip().casefold() not in articles for value in values):
+                    errors.append(f"case item {index} answers must be single definite articles")
+                before, _, after = str(sentence_text).partition("___")
+                noun_match = re.match(r"\s+([A-ZÄÖÜ][\w-]*)\b", after)
+                if not noun_match or noun_match.group(1).casefold() in articles:
+                    errors.append(f"case item {index} must keep the declined noun immediately after the gap")
+                if re.search(r"\b(?:der|die|das|den|dem|des)\s*$", before, re.IGNORECASE):
+                    errors.append(f"case item {index} already has an article before the gap")
+                if noun_match and isinstance(word, str) and word.strip():
+                    base_words = re.sub(r"\s*\([^)]*\)", "", word).split()
+                    base = base_words[-1].casefold() if base_words else ""
+                    if noun_match.group(1).casefold() not in {base, base + "n", base + "en", base + "s", base + "es"}:
+                        errors.append(f"case item {index} visible noun does not match the supplied word")
         for item_id, answer in answer_key.items():
             values = answer if isinstance(answer, list) else [answer]
             if not values or any(not isinstance(value, str) or not value.strip() for value in values):

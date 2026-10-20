@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookMarked, BookOpenCheck, GitMerge, Layers, Loader2, MessageSquare, Mic, MicOff, Pencil, Plus, Sparkles, Trash2, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookMarked, BookOpenCheck, GitMerge, Layers, Loader2, MessageSquare, Mic, MicOff, Pencil, Plus, Sparkles, Trash2, Volume2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   deleteFlashcard,
@@ -176,6 +176,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const vocabularyRecorderRef = useRef<MediaRecorder | null>(null);
   const vocabularyStreamRef = useRef<MediaStream | null>(null);
   const vocabularyChunksRef = useRef<BlobPart[]>([]);
+
+  useEffect(() => {
+    if (!managementNotice) return;
+    const timeout = window.setTimeout(() => setManagementNotice(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [managementNotice]);
 
   useEffect(() => {
     const loadSets = async () => {
@@ -787,8 +793,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       )}
 
       {managementNotice && (
-        <div className="rounded-xl border border-green-700/50 bg-green-900/25 px-4 py-3 text-sm text-green-200">
-          {managementNotice}
+        <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-green-700/50 bg-green-900/25 px-4 py-3 text-sm text-green-200">
+          <span>{managementNotice}</span>
+          <button type="button" onClick={() => setManagementNotice(null)} aria-label="Dismiss confirmation"
+            className="rounded p-1 text-green-200 hover:bg-green-800/40">
+            <X size={16} />
+          </button>
         </div>
       )}
 
@@ -1032,9 +1042,6 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               <div className="mt-4 space-y-3 border-t border-slate-700 pt-4">
                 <div>
                   <div className="text-sm font-semibold text-white">Create a saved gap exercise</div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    The generated text and every attempt are saved, so you can repeat the exercise later.
-                  </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {[10, 20].filter(count => count < selectedSet.cards.length).map(count => (
