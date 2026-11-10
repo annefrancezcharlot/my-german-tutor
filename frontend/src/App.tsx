@@ -12,6 +12,8 @@ import { ResourcesPage } from './components/Resources/ResourcesPage';
 import { AskTeacherPage } from './components/Teacher/AskTeacherPage';
 import { ProfilePage } from './components/Profile/ProfilePage';
 import { ArticleLookupPage } from './components/Articles/ArticleLookupPage';
+import { LessonsPage } from './components/Lessons/LessonsPage';
+import { ArticleLessonPage } from './components/Lessons/ArticleLessonPage';
 import { SessionReviewPage } from './components/Review/SessionReviewPage';
 import { createAuthProfile, getAuthMe, refreshAuthSession, setAuthTokenProvider, signIn, signUp } from './api';
 import type { SignUpProfile } from './api';
@@ -162,6 +164,8 @@ export default function App() {
               <Route path="/exercises" element={<ExercisesPage user={user} />} />
               <Route path="/flashcards" element={<FlashcardsPage user={user} />} />
               <Route path="/der-die-das" element={<ArticleLookupPage />} />
+              <Route path="/lessons" element={<LessonsPage />} />
+              <Route path="/lessons/articles" element={<ArticleLessonPage />} />
               <Route path="/resources" element={<ResourcesPage user={user} />} />
               <Route path="/teacher" element={<AskTeacherPage user={user} />} />
               <Route path="/style" element={<StyleRewritePage user={user} />} />

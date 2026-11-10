@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, BarChart2, BookOpen, LogOut, Wand2, BookMarked, Library, GraduationCap, Menu, X } from 'lucide-react';
+import { MessageSquare, BarChart2, BookOpen, LogOut, Wand2, BookMarked, Library, GraduationCap, NotebookText, Menu, X } from 'lucide-react';
 import type { User } from '../../types';
 import { clsx } from 'clsx';
 import { GlobalTranslator } from './GlobalTranslator';
@@ -18,6 +18,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
     { to: '/topics',    label: 'Conversation', icon: <MessageSquare size={18} /> },
     { to: '/exercises', label: 'Exercises',    icon: <BookOpen size={18} />     },
     { to: '/style',     label: 'Style',        icon: <Wand2 size={18} />        },
+    { to: '/lessons',    label: 'Lessons',      icon: <NotebookText size={18} /> },
     { to: '/flashcards', label: 'Flashcards',   icon: <BookMarked size={18} />   },
     { to: '/der-die-das', label: 'Der Die Das', icon: <BookOpen size={18} />     },
     { to: '/resources', label: 'Resources',     icon: <Library size={18} />      },
