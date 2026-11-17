@@ -795,4 +795,9 @@ export const fr: Record<string, string> = {
   "A transcript turn could not be saved after three attempts.": "Un tour de transcription n'a pas pu être enregistré après trois tentatives.",
   "Audio recording is not supported in this browser.": "L'enregistrement audio n'est pas pris en charge par ce navigateur.",
   "Response interrupted.": "Réponse interrompue.",
+  // chat
+  "Save this conversation before leaving?": "Enregistrer cette conversation avant de partir ?",
+  "It has not been saved yet. Save it to get your corrections and review, or discard it.": "Elle n'est pas encore enregistrée. Enregistrez-la pour obtenir vos corrections et votre bilan, ou abandonnez-la.",
+  "Stay": "Rester",
+  "Save": "Enregistrer",
 };

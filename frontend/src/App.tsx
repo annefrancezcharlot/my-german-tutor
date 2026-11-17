@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, RouterProvider, createBrowserRouter } from 'react-router-dom';
 import { Navbar } from './components/Layout/Navbar';
 import { HomePage } from './components/Home/HomePage';
 import { TopicSelector } from './components/Chat/TopicSelector';
@@ -24,7 +24,15 @@ const AUTH_TOKEN_KEY = 'german_auth_token';
 const REFRESH_TOKEN_KEY = 'german_refresh_token';
 const AUTH_EXPIRES_AT_KEY = 'german_auth_expires_at';
 
+// A data router is required for useBlocker (unsaved-conversation prompt in ChatPage).
+// The existing <Routes> tree is rendered as descendant routes of a single splat route.
+const router = createBrowserRouter([{ path: '*', element: <AppRoot /> }]);
+
 export default function App() {
+  return <RouterProvider router={router} />;
+}
+
+function AppRoot() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { t } = useI18n();
@@ -151,7 +159,7 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
+    <>
       {user ? (
         <div className="min-h-screen bg-slate-900 text-white">
           <Navbar user={user} onLogout={handleLogout} />
@@ -191,6 +199,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
-    </BrowserRouter>
+    </>
   );
 }

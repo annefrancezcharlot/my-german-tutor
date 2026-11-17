@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useBeforeUnload, useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Headphones, Keyboard, Loader2, Mic, MicOff, PhoneOff, Send, X } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -73,6 +73,24 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
   const streamAbortRef = useRef<AbortController | null>(null);
   const realtimeRef = useRef<RealtimeDiscussion | null>(null);
   const userTurnsRef = useRef(0);
+  // Set once the session is saved or discarded, so our own redirects are not blocked.
+  const leavingRef = useRef(false);
+
+  const hasUnsavedConversation = () =>
+    !leavingRef.current && activeSessionId !== null && userTurnsRef.current > 0;
+
+  // Leaving the page (navbar link, back button…) with an unsaved conversation asks to save it first.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    hasUnsavedConversation() && currentLocation.pathname !== nextLocation.pathname,
+  );
+  const leaveBlocked = blocker.state === 'blocked';
+
+  // Closing or reloading the tab can only show the browser's own warning.
+  useBeforeUnload(useCallback((event: BeforeUnloadEvent) => {
+    if (!hasUnsavedConversation()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  }, [activeSessionId]));
 
   useEffect(() => {
     if (activeSessionId || createdRef.current || !topic) return;
@@ -274,7 +292,9 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
     try {
       if (userTurnsRef.current === 0) {
         await deleteSession(activeSessionId);
-        navigate('/topics');
+        leavingRef.current = true;
+        if (blocker.state === 'blocked') blocker.proceed();
+        else navigate('/topics');
         return;
       }
       const saveCategory = topic?.isFreeTopic
@@ -285,20 +305,40 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
             : selectedSaveCategory || 'Free discussions'
         : topic?.category;
       await endSession(activeSessionId, saveCategory);
-      navigate(`/sessions/${activeSessionId}/review`, { replace: true });
+      leavingRef.current = true;
+      // Saved while leaving: continue to the page the learner chose; the review stays on the dashboard.
+      if (blocker.state === 'blocked') blocker.proceed();
+      else navigate(`/sessions/${activeSessionId}/review`, { replace: true });
     } catch {
       setError(t('The session could not be closed. Please retry.'));
       setBusy(false);
-      setShowClose(false);
+      closeDialog();
     }
   };
 
   const discardSession = async () => {
-    if (!activeSessionId) return navigate('/topics');
-    setBusy(true);
-    realtimeRef.current?.stop();
-    await deleteSession(activeSessionId);
-    navigate('/topics');
+    leavingRef.current = true;
+    if (activeSessionId) {
+      setBusy(true);
+      streamAbortRef.current?.abort();
+      realtimeRef.current?.stop();
+      try {
+        await deleteSession(activeSessionId);
+      } catch {
+        leavingRef.current = false;
+        setError(t('The session could not be closed. Please retry.'));
+        setBusy(false);
+        closeDialog();
+        return;
+      }
+    }
+    if (blocker.state === 'blocked') blocker.proceed();
+    else navigate('/topics');
+  };
+
+  const closeDialog = () => {
+    setShowClose(false);
+    if (blocker.state === 'blocked') blocker.reset();
   };
 
   const statusLabel = realtimeState === 'connecting' ? t('Connecting…')
@@ -399,10 +439,10 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
         </>
       )}
 
-      {showClose && (
+      {(showClose || leaveBlocked) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4">
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 sm:p-6">
-            <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">{t('End this conversation?')}</h2><p className="mt-1 text-sm text-slate-400">{t('Saving opens the review immediately while analysis finishes in the background.')}</p></div><button onClick={() => setShowClose(false)} aria-label={t('Close')}><X size={18} /></button></div>
+            <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">{leaveBlocked ? t('Save this conversation before leaving?') : t('End this conversation?')}</h2><p className="mt-1 text-sm text-slate-400">{leaveBlocked ? t('It has not been saved yet. Save it to get your corrections and review, or discard it.') : t('Saving opens the review immediately while analysis finishes in the background.')}</p></div><button onClick={closeDialog} aria-label={t('Close')}><X size={18} /></button></div>
             {topic?.isFreeTopic && userTurnsRef.current > 0 && (
               <div className="mt-5 rounded-xl border border-slate-700 bg-slate-800 p-4">
                 <div className="text-sm font-semibold text-white">{t('Save this free topic under')}</div>
@@ -450,7 +490,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
                 )}
               </div>
             )}
-            <div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowClose(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">{t('Cancel')}</button><button onClick={() => void discardSession()} disabled={busy} className="rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-40">{t('Discard')}</button><button onClick={() => void finishSession()} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{busy ? t('Closing…') : t('Save & review')}</button></div>
+            <div className="mt-6 flex justify-end gap-3"><button onClick={closeDialog} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">{leaveBlocked ? t('Stay') : t('Cancel')}</button><button onClick={() => void discardSession()} disabled={busy} className="rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-40">{t('Discard')}</button><button onClick={() => void finishSession()} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{busy ? t('Closing…') : leaveBlocked ? t('Save') : t('Save & review')}</button></div>
           </div>
         </div>
       )}
