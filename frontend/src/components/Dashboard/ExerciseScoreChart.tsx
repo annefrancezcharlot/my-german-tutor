@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import type { ExerciseTimelineEntry } from '../../types';
 import { ERROR_CATEGORY_COLORS, ERROR_CATEGORY_LABELS } from '../../types';
+import { useI18n } from '../../i18n';
 
 interface Props { entries: ExerciseTimelineEntry[]; }
 
@@ -11,6 +12,7 @@ const formatDay = (iso: string) =>
   new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
 const CustomTooltip = ({ active, payload, label }: any) => {
+  const { t } = useI18n();
   if (!active || !payload?.length) return null;
 
   return (
@@ -21,7 +23,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         .map((p: any) => (
           <div key={p.dataKey} className="flex justify-between gap-4" style={{ color: p.color }}>
             <span>{p.name}</span>
-            <span className="font-bold">{Math.round(p.value)} pts</span>
+            <span className="font-bold">{Math.round(p.value)} {t('pts')}</span>
           </div>
         ))}
     </div>
@@ -29,6 +31,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const ExerciseScoreChart: React.FC<Props> = ({ entries }) => {
+  const { t } = useI18n();
   const categories = Array.from(new Set(entries.map(entry => entry.category)));
   const grouped = new Map<string, Record<string, number | string>>();
 
@@ -77,7 +80,7 @@ export const ExerciseScoreChart: React.FC<Props> = ({ entries }) => {
             key={category}
             type="monotone"
             dataKey={category}
-            name={ERROR_CATEGORY_LABELS[category] ?? category}
+            name={t(ERROR_CATEGORY_LABELS[category] ?? category)}
             stroke={ERROR_CATEGORY_COLORS[category] ?? '#94a3b8'}
             strokeWidth={2}
             dot={{ r: 3 }}

@@ -4,6 +4,8 @@ import { MessageSquare, BarChart2, BookOpen, LogOut, Wand2, BookMarked, Library,
 import type { User } from '../../types';
 import { clsx } from 'clsx';
 import { GlobalTranslator } from './GlobalTranslator';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useI18n } from '../../i18n';
 
 interface Props {
   user: User;
@@ -13,17 +15,18 @@ interface Props {
 export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { t } = useI18n();
 
   const navLinks = [
-    { to: '/topics',    label: 'Conversation', icon: <MessageSquare size={18} /> },
-    { to: '/exercises', label: 'Exercises',    icon: <BookOpen size={18} />     },
-    { to: '/style',     label: 'Style',        icon: <Wand2 size={18} />        },
-    { to: '/lessons',    label: 'Lessons',      icon: <NotebookText size={18} /> },
-    { to: '/flashcards', label: 'Flashcards',   icon: <BookMarked size={18} />   },
+    { to: '/topics',    label: t('Conversation'), icon: <MessageSquare size={18} /> },
+    { to: '/exercises', label: t('Exercises'), icon: <BookOpen size={18} />     },
+    { to: '/style',     label: t('Style'), icon: <Wand2 size={18} />        },
+    { to: '/lessons',    label: t('Lessons'), icon: <NotebookText size={18} /> },
+    { to: '/flashcards', label: t('Flashcards'), icon: <BookMarked size={18} />   },
     { to: '/der-die-das', label: 'Der Die Das', icon: <BookOpen size={18} />     },
-    { to: '/resources', label: 'Resources',     icon: <Library size={18} />      },
-    { to: '/teacher',   label: 'Ask teacher',   icon: <GraduationCap size={18} /> },
-    { to: '/dashboard', label: 'Dashboard',     icon: <BarChart2 size={18} />    },
+    { to: '/resources', label: t('Resources'), icon: <Library size={18} />      },
+    { to: '/teacher',   label: t('Ask teacher'), icon: <GraduationCap size={18} /> },
+    { to: '/dashboard', label: t('Dashboard'), icon: <BarChart2 size={18} />    },
   ];
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
@@ -60,6 +63,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
 
           <div className="hidden items-center gap-3 lg:flex">
             <GlobalTranslator />
+            <LanguageSwitcher />
             <div aria-hidden="true" className="h-6 w-px bg-slate-700" />
             <Link to="/profile" className="hidden rounded-lg px-2 py-1 text-right transition-colors hover:bg-slate-700 sm:block">
               <div className="text-sm font-medium text-white">{user.username}</div>
@@ -68,7 +72,8 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
             <button
               onClick={onLogout}
               className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-              title="Log out"
+              title={t('Log out')}
+              aria-label={t('Log out')}
             >
               <LogOut size={18} />
             </button>
@@ -77,7 +82,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
             type="button"
             onClick={() => setMenuOpen(open => !open)}
             className="rounded-lg p-2 text-slate-200 hover:bg-slate-700 lg:hidden"
-            aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-label={menuOpen ? t('Close navigation menu') : t('Open navigation menu')}
             aria-expanded={menuOpen}
             aria-controls="mobile-navigation"
           >
@@ -104,7 +109,7 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
         <>
           <button
             type="button"
-            aria-label="Close navigation menu"
+            aria-label={t('Close navigation menu')}
             onClick={() => setMenuOpen(false)}
             className="fixed inset-0 top-14 z-40 bg-slate-950/65 lg:hidden"
           />
@@ -115,14 +120,14 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
             <div className="mb-3 flex items-center justify-between rounded-xl bg-slate-900 px-3 py-2.5">
               <Link to="/profile" className="min-w-0">
                 <div className="truncate text-sm font-semibold text-white">{user.username}</div>
-                <div className="text-xs font-bold text-blue-400">Level {user.level} · Profile</div>
+                <div className="text-xs font-bold text-blue-400">{t('Level {level} · Profile', { level: user.level })}</div>
               </Link>
               <button
                 type="button"
                 onClick={onLogout}
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
               >
-                <LogOut size={17} /> Log out
+                <LogOut size={17} /> {t('Log out')}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -132,8 +137,9 @@ export const Navbar: React.FC<Props> = ({ user, onLogout }) => {
                   <span className="truncate">{link.label}</span>
                 </Link>
               ))}
-              <div className="col-span-2 mt-1 border-t border-slate-700 pt-2">
+              <div className="col-span-2 mt-1 flex flex-col gap-2 border-t border-slate-700 pt-2">
                 <GlobalTranslator fullWidth />
+                <LanguageSwitcher className="self-start" />
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Message } from '../../types';
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useI18n } from '../../i18n';
 
 interface Props {
   message: Message;
@@ -11,6 +12,7 @@ interface Props {
 
 export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback = true }) => {
   const [showCorrected, setShowCorrected] = useState(false);
+  const { t } = useI18n();
   const isUser = message.role === 'user';
 
   const formatContent = (text: string) => {
@@ -27,7 +29,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback 
           'text-xs text-slate-400 mb-1',
           isUser ? 'text-right' : 'text-left'
         )}>
-          {isUser ? 'You' : 'Claude'}
+          {isUser ? t('You') : 'Claude'}
         </div>
 
         {/* Main bubble */}
@@ -43,7 +45,8 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback 
               <button
                 type="button"
                 onClick={() => onSpeak(message.content)}
-                title="Read answer aloud"
+                title={t('Read answer aloud')}
+                aria-label={t('Read answer aloud')}
                 className="rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-slate-600 hover:text-white"
               >
                 <Volume2 size={15} />
@@ -61,7 +64,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback 
             >
               <span className="flex items-center gap-1.5">
                 <AlertCircle size={13} />
-                Show corrected version
+                {t('Show corrected version')}
               </span>
               {showCorrected ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
@@ -77,7 +80,7 @@ export const MessageBubble: React.FC<Props> = ({ message, onSpeak, showFeedback 
         {showFeedback && isUser && message.has_errors === false && (
           <div className="flex items-center justify-end gap-1 text-xs text-green-400">
             <CheckCircle2 size={12} />
-            <span>No mistakes</span>
+            <span>{t('No mistakes')}</span>
           </div>
         )}
       </div>

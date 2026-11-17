@@ -6,6 +6,7 @@ import { ExerciseModal } from './ExerciseModal';
 import { Info, Loader2, Zap, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useI18n } from '../../i18n';
 
 interface Props { user: User; }
 
@@ -96,6 +97,7 @@ const dedupeExercises = (items: Exercise[]): Exercise[] => {
 export const ExercisesPage: React.FC<Props> = ({ user }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [exercises, setExercises]   = useState<Exercise[]>([]);
   const [loading, setLoading]       = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -152,11 +154,11 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
       if (status === 422 && typeof detail === 'string') {
         setGenerationError(detail);
       } else if (status === 429) {
-        setGenerationError('You have generated a lot of exercises recently. Please wait a while and try again.');
+        setGenerationError(t('You have generated a lot of exercises recently. Please wait a while and try again.'));
       } else if (status === 400 && typeof detail === 'string') {
         setGenerationError(detail);
       } else {
-        setGenerationError('Something went wrong while creating exercises. Please try again.');
+        setGenerationError(t('Something went wrong while creating exercises. Please try again.'));
       }
     } finally {
       setGenerating(false);
@@ -191,21 +193,20 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Exercises</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">{t('Exercises')}</h1>
       </div>
 
       {/* ── Generate panel ──────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 sm:rounded-2xl sm:p-5">
         <h2 className="font-semibold text-white flex items-center gap-2">
           <Zap size={16} className="text-yellow-400" />
-          Generate new exercises
+          {t('Generate new exercises')}
         </h2>
 
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-blue-800/50 bg-blue-950/35 px-3 py-2.5 text-xs leading-relaxed text-blue-100">
           <Info size={15} className="mt-0.5 shrink-0 text-blue-400" />
           <span>
-            Have new conversations regularly to keep your practice current. Newly generated
-            exercises combine your most frequent weak areas with the latest recorded examples.
+            {t('Have new conversations regularly to keep your practice current. Newly generated exercises combine your most frequent weak areas with the latest recorded examples.')}
           </span>
         </div>
 
@@ -213,15 +214,15 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
           <div className="mt-4" role="status" aria-live="polite">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-medium text-blue-200">
-                Generating and proofreading exercises…
+                {t('Generating and proofreading exercises…')}
               </span>
-              <span className="text-slate-500">This may take a moment</span>
+              <span className="text-slate-500">{t('This may take a moment')}</span>
             </div>
             <div
               className="h-2 overflow-hidden rounded-full bg-slate-700"
               role="progressbar"
-              aria-label="Exercise generation in progress"
-              aria-valuetext="Generating and proofreading exercises"
+              aria-label={t('Exercise generation in progress')}
+              aria-valuetext={t('Generating and proofreading exercises…')}
             >
               <div className="exercise-generation-progress h-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-500" />
             </div>
@@ -230,20 +231,19 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
 
         <div className="mt-4">
           <label htmlFor="exercise-topic" className="block text-xs text-slate-400 mb-2">
-            Topic or grammar focus (optional)
+            {t('Topic or grammar focus (optional)')}
           </label>
           <input
             id="exercise-topic"
             type="text"
             value={exerciseTopic}
             onChange={(event) => setExerciseTopic(event.target.value)}
-            placeholder="e.g. conjugation with you plural"
+            placeholder={t('e.g. conjugation with you plural')}
             className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             maxLength={200}
           />
           <p className="mt-1.5 text-xs text-slate-500">
-            Supported topics: grammar, word order, cases, gender, verb forms and tenses, and
-            prepositions. Spelling, punctuation and style are not available.
+            {t('Supported topics: grammar, word order, cases, gender, verb forms and tenses, and prepositions. Spelling, punctuation and style are not available.')}
           </p>
         </div>
 
@@ -251,7 +251,7 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
         {focusGroups.length > 0 && (
           <div className="mt-4">
             <div className="text-xs text-slate-400 mb-2">
-              Focus (optional):
+              {t('Focus (optional):')}
             </div>
             <div className="flex flex-wrap gap-2">
               {focusGroups.map(group => {
@@ -269,7 +269,7 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
                         : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
                     )}
                   >
-                    {group.label}
+                    {t(group.label)}
                   </button>
                 );
               })}
@@ -283,8 +283,8 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
             className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
           >
             {generating
-              ? <><Loader2 size={15} className="animate-spin" /> Generating...</>
-              : <><RefreshCw size={15} /> Create exercises</>}
+              ? <><Loader2 size={15} className="animate-spin" /> {t('Generating...')}</>
+              : <><RefreshCw size={15} /> {t('Create exercises')}</>}
           </button>
         </div>
       </div>
@@ -308,14 +308,14 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
                 : 'text-slate-400 hover:text-white'
             )}
           >
-            {tab === 'pending' ? `Open (${pending.length})` : `Completed (${completed.length})`}
+            {tab === 'pending' ? t('Open ({count})', { count: pending.length }) : t('Completed ({count})', { count: completed.length })}
           </button>
         ))}
       </div>
 
       {filterGroups.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs text-slate-400">Filter:</div>
+          <div className="text-xs text-slate-400">{t('Filter:')}</div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedFilterGroups([])}
@@ -326,7 +326,7 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
                   : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
               )}
             >
-              All
+              {t('All')}
             </button>
             {filterGroups.map(group => {
               const active = selectedFilterGroups.includes(group.key);
@@ -343,7 +343,7 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
                       : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
                   )}
                 >
-                  {group.label}
+                  {t(group.label)}
                 </button>
               );
             })}
@@ -354,7 +354,7 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
       {/* ── Exercise grid ────────────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center h-40 text-slate-400">
-          <Loader2 size={24} className="animate-spin mr-2" /> Loading...
+          <Loader2 size={24} className="animate-spin mr-2" /> {t('Loading...')}
         </div>
       ) : shown.length === 0 ? (
         <EmptyState
@@ -390,30 +390,33 @@ export const ExercisesPage: React.FC<Props> = ({ user }) => {
 /* ── Empty state ────────────────────────────────────────────────────────── */
 const EmptyState: React.FC<{ tab: Tab; filtered: boolean; onGenerate: () => void }> = ({
   tab, filtered, onGenerate,
-}) => (
+}) => {
+  const { t } = useI18n();
+  return (
   <div className="bg-slate-800 rounded-2xl border border-slate-700 p-12 text-center">
     <div className="text-5xl mb-4">{filtered ? '🔎' : tab === 'pending' ? '📝' : '🎉'}</div>
     <div className="text-white font-semibold mb-2">
       {filtered
-        ? 'No exercises match this filter'
+        ? t('No exercises match this filter')
         : tab === 'pending'
-        ? 'No open exercises'
-        : 'No completed exercises yet'}
+        ? t('No open exercises')
+        : t('No completed exercises yet')}
     </div>
     <p className="text-slate-400 text-sm mb-6">
       {filtered
-        ? 'Choose a different category or clear the selected filters.'
+        ? t('Choose a different category or clear the selected filters.')
         : tab === 'pending'
-        ? 'Have a few conversations first to collect mistakes, then generate exercises.'
-        : 'Complete open exercises to see them here.'}
+        ? t('Have a few conversations first to collect mistakes, then generate exercises.')
+        : t('Complete open exercises to see them here.')}
     </p>
     {tab === 'pending' && !filtered && (
       <button
         onClick={onGenerate}
         className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
       >
-        Generate exercises
+        {t('Generate exercises')}
       </button>
     )}
   </div>
-);
+  );
+};

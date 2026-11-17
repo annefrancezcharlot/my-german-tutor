@@ -3,6 +3,7 @@ import type { ErrorDetail } from '../../types';
 import { ERROR_CATEGORY_COLORS, ERROR_CATEGORY_LABELS } from '../../types';
 import { X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useI18n } from '../../i18n';
 
 interface Props {
   corrections: ErrorDetail[];
@@ -11,6 +12,7 @@ interface Props {
 
 export const CorrectionPanel: React.FC<Props> = ({ corrections, onClose }) => {
   const [expanded, setExpanded] = useState<number | null>(0);
+  const { t } = useI18n();
 
   if (corrections.length === 0) return null;
 
@@ -21,11 +23,12 @@ export const CorrectionPanel: React.FC<Props> = ({ corrections, onClose }) => {
         <div className="flex items-center gap-2">
           <AlertCircle size={16} className="text-amber-400" />
           <span className="font-semibold text-white text-sm">
-            {corrections.length} mistakes found
+            {t('{count} mistakes found', { count: corrections.length })}
           </span>
         </div>
         <button
           onClick={onClose}
+          aria-label={t('Close')}
           className="text-slate-400 hover:text-white transition-colors p-1 rounded"
         >
           <X size={16} />
@@ -36,7 +39,7 @@ export const CorrectionPanel: React.FC<Props> = ({ corrections, onClose }) => {
       <div className="flex-1 overflow-y-auto divide-y divide-slate-700">
         {corrections.map((corr, idx) => {
           const color = ERROR_CATEGORY_COLORS[corr.category] || '#6b7280';
-          const label = ERROR_CATEGORY_LABELS[corr.category] || corr.category;
+          const label = t(ERROR_CATEGORY_LABELS[corr.category] || corr.category);
           const isOpen = expanded === idx;
 
           return (
@@ -52,6 +55,7 @@ export const CorrectionPanel: React.FC<Props> = ({ corrections, onClose }) => {
                 </span>
                 <button
                   onClick={() => setExpanded(isOpen ? null : idx)}
+                  aria-label={isOpen ? t('Hide explanation') : t('Show explanation')}
                   className="text-slate-400 hover:text-white transition-colors"
                 >
                   {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -97,7 +101,7 @@ export const CorrectionPanel: React.FC<Props> = ({ corrections, onClose }) => {
                 color: ERROR_CATEGORY_COLORS[cat] || '#6b7280',
               }}
             >
-              {ERROR_CATEGORY_LABELS[cat] || cat}
+              {t(ERROR_CATEGORY_LABELS[cat] || cat)}
             </span>
           ))}
         </div>

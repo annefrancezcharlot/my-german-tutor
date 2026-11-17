@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useI18n } from '../../i18n';
 import {
   ExternalLink, FileText, Headphones, HelpCircle, MessageSquare, PlaySquare,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ const resourceLabels: Record<ResourceType, string> = {
 };
 
 export const ResourcesPage: React.FC<Props> = ({ user }) => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [resources, setResources] = useState<LearningResource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
       try {
         setResources(await getResources());
       } catch {
-        setError('Resources could not be loaded.');
+        setError(t('Resources could not be loaded.'));
       } finally {
         setLoading(false);
       }
@@ -68,15 +70,15 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
   };
 
   if (loading) {
-    return <div className="text-slate-300">Loading resources...</div>;
+    return <div className="text-slate-300">{t('Loading resources...')}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Resources</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">{t('Resources')}</h1>
         <p className="text-slate-400 text-sm">
-          Videos, texts, and audio sources for learning, with optional Claude questions.
+          {t('Videos, texts, and audio sources for learning, with optional Claude questions.')}
         </p>
       </div>
 
@@ -101,7 +103,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
               )}
             >
               {type === 'all' ? <HelpCircle size={18} /> : resourceIcons[type]}
-              {type === 'all' ? 'All' : resourceLabels[type]}
+              {type === 'all' ? t('All') : t(resourceLabels[type])}
             </button>
           ))}
         </div>
@@ -117,7 +119,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
                 : 'bg-slate-900 text-slate-300 hover:bg-slate-700 hover:text-white'
             )}
           >
-            All topics
+            {t('All topics')}
           </button>
           {topics.map(topic => (
             <button
@@ -146,7 +148,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-900/40 px-2.5 py-1 text-xs font-semibold text-blue-200">
                       {resourceIcons[resource.type]}
-                      {resourceLabels[resource.type]}
+                      {t(resourceLabels[resource.type])}
                     </span>
                     <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs text-slate-200">
                       {resource.topic} · {resource.level}
@@ -164,7 +166,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
                     rel="noreferrer"
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-blue-500 hover:text-white"
                   >
-                    Open
+                    {t('Open')}
                     <ExternalLink size={15} />
                   </a>
                   <button
@@ -172,7 +174,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
                     onClick={() => handleDiscuss(resource)}
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
                   >
-                    Discuss
+                    {t('Discuss')}
                     <MessageSquare size={15} />
                   </button>
                 </div>
@@ -181,7 +183,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Focus
+                    {t('Focus')}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(resource.focus ?? []).map(item => (
@@ -194,7 +196,7 @@ export const ResourcesPage: React.FC<Props> = ({ user }) => {
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Vocabulary
+                    {t('Vocabulary')}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(resource.vocabulary ?? []).map(item => (

@@ -13,6 +13,7 @@ import type {
   PronunciationFeedbackResponse, TeacherRule, TranscriptionResponse,
   RealtimeCredentials, SessionReview,
 } from '../types';
+import { getCurrentLanguage, tr } from '../i18n';
 
 // In local development, Vite proxies /api to the FastAPI server. Deployments can
 // override this with the public backend URL at build time.
@@ -36,6 +37,17 @@ export const lookupNoun = (word: string): Promise<NounResult[]> =>
   api.get('/nouns/lookup', { params: { word } }).then(r => r.data);
 
 let authTokenProvider: (() => Promise<string | null>) | null = null;
+
+// Lets the backend write AI explanations, hints and feedback in the interface language.
+const UI_LANGUAGE_HEADER = 'X-UI-Language';
+
+const addLanguageHeader = (config: InternalAxiosRequestConfig) => {
+  config.headers[UI_LANGUAGE_HEADER] = getCurrentLanguage();
+  return config;
+};
+
+api.interceptors.request.use(addLanguageHeader);
+authApi.interceptors.request.use(addLanguageHeader);
 
 export const setAuthTokenProvider = (provider: () => Promise<string | null>) => {
   authTokenProvider = provider;
@@ -209,6 +221,7 @@ const authenticatedFetch = async (path: string, init: RequestInit = {}) => {
   const token = authTokenProvider ? await authTokenProvider() : null;
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
+  headers.set(UI_LANGUAGE_HEADER, getCurrentLanguage());
   return fetch(`${apiBaseUrl}${path}`, { ...init, headers });
 };
 
@@ -253,7 +266,7 @@ export const streamMessage = async (
     if (eventName === 'error') {
       const errorMessage = typeof data.message === 'string'
         ? data.message
-        : 'Response interrupted.';
+        : tr('Response interrupted.');
       streamError = errorMessage;
       handlers.onError?.(errorMessage);
     }

@@ -3,8 +3,10 @@ import { clsx } from 'clsx';
 import { ARTICLE_COLORS, ARTICLE_RULES, RULE_GROUPS, splitExample } from './articleLessonData';
 import type { Article, RuleGroupId } from './articleLessonData';
 import { WORD_SETS } from './lessonPracticeData';
+import { useI18n } from '../../i18n';
 
-interface Question { noun: string; article: Article; hint: string }
+/** hint is an English source string, translated at render; ruleNumber marks hints that are rule titles. */
+interface Question { noun: string; article: Article; hint: string; ruleNumber?: string }
 
 const ARTICLES: Article[] = ['der', 'die', 'das'];
 
@@ -20,7 +22,7 @@ function buildPool(source: Source): Question[] {
     .flatMap(rule => [
       ...rule.sections.flatMap(section => section.examples),
       ...(rule.exceptions ?? []),
-    ].map(example => ({ ...splitExample(example), hint: `Rule ${rule.number}: ${rule.title}` })))
+    ].map(example => ({ ...splitExample(example), hint: rule.title, ruleNumber: rule.number })))
     .filter(q => !/\d/.test(q.noun) && !q.noun.includes(' von '));
 }
 
@@ -33,6 +35,7 @@ function pick(pool: Question[], avoid?: Question): Question {
 
 export const RulePractice: React.FC = () => {
   const [source, setSource] = useState<Source>('all');
+  const { t } = useI18n();
   const pool = useMemo(() => buildPool(source), [source]);
   const [question, setQuestion] = useState<Question>(() => pick(buildPool('all')));
   const [answer, setAnswer] = useState<Article | null>(null);
@@ -58,30 +61,30 @@ export const RulePractice: React.FC = () => {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div className="space-y-2">
-        <label htmlFor="practice-source" className="block text-sm font-medium text-slate-300">What do you want to practise?</label>
+        <label htmlFor="practice-source" className="block text-sm font-medium text-slate-300">{t('What do you want to practise?')}</label>
         <select
           id="practice-source"
           value={source}
           onChange={event => changeSource(event.target.value as Source)}
           className="min-h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-blue-400 focus:outline-none"
         >
-          <option value="all">All rules</option>
-          <optgroup label="By gender rules">
-            {RULE_GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+          <option value="all">{t('All rules')}</option>
+          <optgroup label={t('By gender rules')}>
+            {RULE_GROUPS.map(g => <option key={g.id} value={g.id}>{t(g.label)}</option>)}
           </optgroup>
-          <optgroup label="By topic">
-            {WORD_SETS.map(w => <option key={w.id} value={`set:${w.id}`}>{w.label}</option>)}
+          <optgroup label={t('By topic')}>
+            {WORD_SETS.map(w => <option key={w.id} value={`set:${w.id}`}>{t(w.label)}</option>)}
           </optgroup>
         </select>
       </div>
 
       <div className="flex justify-between text-sm text-slate-400" aria-live="polite">
-        <span>{score.correct} / {score.total} correct</span>
-        <span>Streak: {score.streak} 🔥</span>
+        <span>{t('{correct} / {total} correct', { correct: score.correct, total: score.total })}</span>
+        <span>{t('Streak: {count}', { count: score.streak })} 🔥</span>
       </div>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800 p-6 text-center">
-        <p className="text-sm text-slate-400">Which article?</p>
+        <p className="text-sm text-slate-400">{t('Which article?')}</p>
         <p className="my-4 text-4xl font-bold">
           <span className={clsx('inline-block min-w-[2.5ch]', answer ? ARTICLE_COLORS[question.article].text : 'text-slate-500')}>{answer ? question.article : '?'}</span>{' '}
           {question.noun}
@@ -106,14 +109,14 @@ export const RulePractice: React.FC = () => {
         {answer && (
           <div className="mt-5 space-y-3 text-left" role="status">
             <p className={clsx('font-semibold', correct ? 'text-emerald-300' : 'text-red-300')}>
-              {correct ? '✓ Correct!' : `✗ It's ${question.article} ${question.noun}.`}
+              {correct ? `✓ ${t('Correct!')}` : `✗ ${t('It’s {word}.', { word: `${question.article} ${question.noun}` })}`}
             </p>
-            <p className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-slate-300">{question.hint}</p>
-            <button onClick={next} className="min-h-11 w-full rounded-xl bg-blue-600 py-2 font-medium hover:bg-blue-500">Next word →</button>
+            <p className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-slate-300">{question.ruleNumber ? t('Rule {number}: {title}', { number: question.ruleNumber, title: t(question.hint) }) : t(question.hint)}</p>
+            <button onClick={next} className="min-h-11 w-full rounded-xl bg-blue-600 py-2 font-medium hover:bg-blue-500">{t('Next word →')}</button>
           </div>
         )}
       </div>
-      <p className="text-center text-xs text-slate-500">Rules have exceptions – always learn the article with the noun.</p>
+      <p className="text-center text-xs text-slate-500">{t('Rules have exceptions – always learn the article with the noun.')}</p>
     </div>
   );
 };

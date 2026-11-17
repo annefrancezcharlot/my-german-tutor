@@ -3,6 +3,7 @@ import {
   CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import type { ActivityTimelineEntry } from '../../types';
+import { useI18n } from '../../i18n';
 
 interface Props { entries: ActivityTimelineEntry[]; series?: 'all' | 'conversations' | 'exercises' | 'flashcardSets'; }
 
@@ -26,6 +27,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const ActivityChart: React.FC<Props> = ({ entries, series = 'all' }) => {
+  const { t } = useI18n();
   const data = entries.map(entry => ({
     day: formatDay(entry.date),
     conversations: entry.conversations,
@@ -54,7 +56,7 @@ export const ActivityChart: React.FC<Props> = ({ entries, series = 'all' }) => {
         {(series === 'all' || series === 'conversations') && <Line
           type="monotone"
           dataKey="conversations"
-          name="Conversations"
+          name={t('Conversations')}
           stroke="#38bdf8"
           strokeWidth={2}
           dot={{ r: 3 }}
@@ -63,7 +65,7 @@ export const ActivityChart: React.FC<Props> = ({ entries, series = 'all' }) => {
         {(series === 'all' || series === 'exercises') && <Line
           type="monotone"
           dataKey="exercises"
-          name="Exercises"
+          name={t('Exercises')}
           stroke="#a78bfa"
           strokeWidth={2}
           dot={{ r: 3 }}
@@ -72,7 +74,7 @@ export const ActivityChart: React.FC<Props> = ({ entries, series = 'all' }) => {
         {(series === 'all' || series === 'flashcardSets') && <Line
           type="monotone"
           dataKey="flashcardSets"
-          name="Card sets"
+          name={t('Card sets')}
           stroke="#fb923c"
           strokeWidth={2}
           dot={{ r: 3 }}

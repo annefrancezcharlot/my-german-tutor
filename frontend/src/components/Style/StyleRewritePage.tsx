@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useI18n } from '../../i18n';
 import type { ConversationSession, Message, StyleRewriteItem, StyleRewriteMode, User } from '../../types';
 import { getSavedStyleRewrites, getSessionMessages, getUserSessions, rewriteSessionStyle } from '../../api';
 import { clsx } from 'clsx';
@@ -56,6 +57,7 @@ const speechModelByRewriteMode: Partial<Record<StyleRewriteMode, string>> = {
 };
 
 export const StyleRewritePage: React.FC<Props> = ({ user }) => {
+  const { t } = useI18n();
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -80,7 +82,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
         setSessions(loadedSessions);
         setSelectedSessionId(null);
       } catch {
-        setError('Sessions could not be loaded.');
+        setError(t('Sessions could not be loaded.'));
       } finally {
         setLoadingSessions(false);
       }
@@ -97,7 +99,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
     setLoadingMessages(true);
     getSessionMessages(selectedSessionId)
       .then(result => { if (!cancelled) setMessages(result); })
-      .catch(() => { if (!cancelled) setMessageError('The conversation could not be loaded. Please try another session or reload the page.'); })
+      .catch(() => { if (!cancelled) setMessageError(t('The conversation could not be loaded. Please try another session or reload the page.')); })
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
     return () => { cancelled = true; };
   }, [selectedSessionId, user.id]);
@@ -129,7 +131,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
         );
         if (!cancelled) setRewrites(response.rewrites);
       } catch {
-        if (!cancelled) setError('Saved style rewrites could not be loaded.');
+        if (!cancelled) setError(t('Saved style rewrites could not be loaded.'));
       } finally {
         if (!cancelled) setLoadingSaved(false);
       }
@@ -155,7 +157,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
       );
       setRewrites(response.rewrites);
     } catch {
-      setError('Style rewrite failed.');
+      setError(t('Style rewrite failed.'));
     } finally {
       setRewriting(false);
     }
@@ -173,7 +175,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
         dialect: selectedSwissDialect,
       });
     } catch {
-      setError('Audio could not be played.');
+      setError(t('Audio could not be played.'));
     } finally {
       setSpeakingText(null);
     }
@@ -182,9 +184,9 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Style</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">{t('Style')}</h1>
         <p className="text-slate-400 text-sm">
-          Rewrite your sentences from a completed session.
+          {t('Rewrite your sentences from a completed session.')}
         </p>
       </div>
 
@@ -192,17 +194,17 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
         <aside className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
           <div className="px-4 py-3 bg-slate-900 border-b border-slate-700 flex items-center gap-2">
             <CalendarDays size={16} className="text-blue-400" />
-            <h2 className="font-semibold text-white text-sm">Choose session</h2>
+            <h2 className="font-semibold text-white text-sm">{t('Choose session')}</h2>
           </div>
 
           {loadingSessions ? (
             <div className="h-32 flex items-center justify-center text-slate-400 text-sm">
               <Loader2 size={18} className="animate-spin mr-2" />
-              Loading...
+              {t('Loading...')}
             </div>
           ) : sessions.length === 0 ? (
             <div className="p-4 text-sm text-slate-400">
-              No completed sessions available.
+              {t('No completed sessions available.')}
             </div>
           ) : (
             <div className="max-h-[620px] overflow-y-auto divide-y divide-slate-700/70">
@@ -250,7 +252,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
           <div className="rounded-2xl border border-slate-700 bg-slate-800 p-5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4">
               <fieldset className="min-w-0">
-                <legend className="mb-2 text-sm font-medium text-slate-300">Style</legend>
+                <legend className="mb-2 text-sm font-medium text-slate-300">{t('Style')}</legend>
                 <div className="flex flex-wrap gap-2">
                   {rewriteModes.map(mode => (
                     <button
@@ -266,13 +268,13 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
                           : 'bg-slate-900 text-slate-400 hover:bg-slate-700 hover:text-white',
                       )}
                     >
-                      {mode.label}
+                      {t(mode.label)}
                     </button>
                   ))}
                 </div>
               </fieldset>
               <fieldset className="col-span-2 min-w-0">
-                <legend className="mb-2 text-sm font-medium text-slate-300">Swiss German</legend>
+                <legend className="mb-2 text-sm font-medium text-slate-300">{t('Swiss German')}</legend>
                 <div className="flex flex-wrap gap-2">
                   {swissDialects.map(dialect => (
                     <button
@@ -299,7 +301,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
                 className="col-start-2 row-start-1 flex min-h-11 self-start items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {rewriting ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-                {rewriting ? 'Changing style…' : 'Change style'}
+                {rewriting ? t('Changing style…') : t('Change style')}
               </button>
             </div>
           </div>
@@ -307,33 +309,33 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
           {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
 
           {selectedSession && (
-            <section aria-label="Selected conversation" className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800">
+            <section aria-label={t('Selected conversation')} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800">
               <div className="border-b border-slate-700 px-5 py-4">
                 <h2 className="flex items-center gap-2 font-semibold text-white">
                   <MessageSquareText size={17} className="shrink-0 text-slate-400" />
                   {selectedSession.topic}
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  {selectedSession.topic_category} · {formatDate(selectedSession.started_at)}
+                  {selectedSession.topic_category ? t(selectedSession.topic_category) : null} · {formatDate(selectedSession.started_at)}
                 </p>
               </div>
               <div className="space-y-4 p-5">
                 {(rewriting || loadingSaved) && (
                   <p role="status" className="flex items-center gap-2 text-sm text-slate-400">
                     <Loader2 size={16} className="animate-spin" />
-                    {rewriting ? 'Changing style…' : 'Loading saved rewrites…'}
+                    {rewriting ? t('Changing style…') : t('Loading saved rewrites…')}
                   </p>
                 )}
                 {messageError && <p role="alert" className="text-sm text-red-300">{messageError}</p>}
                 {loadingMessages ? (
-                  <p role="status" className="text-sm text-slate-400">Loading conversation…</p>
+                  <p role="status" className="text-sm text-slate-400">{t('Loading conversation…')}</p>
                 ) : messages.length === 0 && !messageError ? (
-                  <p className="text-sm text-slate-400">This session has no messages yet.</p>
+                  <p className="text-sm text-slate-400">{t('This session has no messages yet.')}</p>
                 ) : messages.map((message, index) => {
                   const rewrite = rewrites.find(item => item.message_id === message.id);
                   return (
                     <div key={message.id}>
-                      <p className="mb-2 text-xs font-semibold text-slate-400">{message.role === 'user' ? 'You' : 'Tutor'}</p>
+                      <p className="mb-2 text-xs font-semibold text-slate-400">{message.role === 'user' ? t('You') : t('Tutor')}</p>
                       {rewrite ? (
                         <RewriteRow rewrite={rewrite} index={index} speakingText={speakingText} onSpeak={handleSpeak} />
                       ) : (
@@ -343,7 +345,7 @@ export const StyleRewritePage: React.FC<Props> = ({ user }) => {
                   );
                 })}
                 {rewriteRequested && !rewriting && rewrites.length === 0 && !error && (
-                  <p className="text-sm text-slate-400">No style suggestions were returned for this session.</p>
+                  <p className="text-sm text-slate-400">{t('No style suggestions were returned for this session.')}</p>
                 )}
               </div>
             </section>
@@ -359,11 +361,13 @@ const RewriteRow: React.FC<{
   index: number;
   speakingText: string | null;
   onSpeak: (text: string) => void;
-}> = ({ rewrite, index, speakingText, onSpeak }) => (
+}> = ({ rewrite, index, speakingText, onSpeak }) => {
+  const { t } = useI18n();
+  return (
   <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
     <div className="px-4 py-2 bg-slate-900 border-b border-slate-700 flex items-center justify-between">
       <span className="text-xs font-semibold text-slate-300">
-        Sentence {index + 1}
+        {t('Sentence {number}', { number: index + 1 })}
       </span>
       <div className="flex items-center gap-2">
         {rewrite.created_at && (
@@ -383,13 +387,13 @@ const RewriteRow: React.FC<{
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-xs text-slate-500 uppercase font-semibold">
-            Corrected
+            {t('Corrected')}
           </div>
           <button
             type="button"
             onClick={() => onSpeak(rewrite.original)}
             disabled={speakingText !== null}
-            title="Read corrected text aloud"
+            title={t('Read corrected text aloud')}
             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
           >
             {speakingText === rewrite.original
@@ -409,13 +413,13 @@ const RewriteRow: React.FC<{
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-xs text-slate-500 uppercase font-semibold">
-            Better
+            {t('Better')}
           </div>
           <button
             type="button"
             onClick={() => onSpeak(rewrite.rewritten)}
             disabled={speakingText !== null}
-            title="Read rewrite aloud"
+            title={t('Read rewrite aloud')}
             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
           >
             {speakingText === rewrite.rewritten
@@ -429,4 +433,5 @@ const RewriteRow: React.FC<{
       </div>
     </div>
   </div>
-);
+  );
+};

@@ -38,6 +38,7 @@ import {
   MAX_FLASHCARD_TERMS,
   parseFlashcardTerms,
 } from './flashcardUtils';
+import { useI18n } from '../../i18n';
 
 type DetailTab = 'example' | 'cases' | 'tenses';
 type CardStartSide = 'front' | 'back';
@@ -94,12 +95,13 @@ const translationLanguageLabels: Record<FlashcardTranslationLanguage, string> = 
 };
 
 const FlashcardTermPreview: React.FC<{ terms: string[] }> = ({ terms }) => {
+  const { t } = useI18n();
   if (terms.length === 0) return null;
 
   return (
     <details className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2">
       <summary className="cursor-pointer text-xs font-semibold text-slate-300">
-        Review the {terms.length} {terms.length === 1 ? 'term' : 'terms'} that will be sent
+        {terms.length === 1 ? t('Review the term that will be sent') : t('Review the {count} terms that will be sent', { count: terms.length })}
       </summary>
       <ol className="mt-3 max-h-48 space-y-1 overflow-y-auto pl-6 text-sm text-slate-300">
         {terms.map(term => (
@@ -127,6 +129,7 @@ interface Props {
 
 export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
+  const { t, language } = useI18n();
   const [sets, setSets] = useState<FlashcardSetSummary[]>([]);
   const [selectedSet, setSelectedSet] = useState<FlashcardSet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,7 +153,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   const [generatePreciseTopic, setGeneratePreciseTopic] = useState('');
   const [generateCount, setGenerateCount] = useState(12);
   const [generationMode, setGenerationMode] = useState<GenerationMode>('theme');
-  const [translationLanguage, setTranslationLanguage] = useState<FlashcardTranslationLanguage>('en');
+  const [translationLanguage, setTranslationLanguage] = useState<FlashcardTranslationLanguage>(language === 'fr' ? 'fr' : 'en');
   const [customSetName, setCustomSetName] = useState('');
   const [customTermsText, setCustomTermsText] = useState('');
   const [vocabularyRecording, setVocabularyRecording] = useState(false);
@@ -190,7 +193,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       try {
         setSets(await getFlashcardSets());
       } catch {
-        setError('Flashcards could not be loaded.');
+        setError(t('Flashcards could not be loaded.'));
       } finally {
         setLoading(false);
       }
@@ -240,8 +243,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       : 'clear natural English pronunciation'
     : 'slow clear German pronunciation';
   const cardStartSideLabels: Record<CardStartSide, string> = {
-    front: 'German first',
-    back: `${translationLanguageLabels[selectedSet?.translation_language ?? 'en']} first`,
+    front: t('German first'),
+    back: selectedSet?.translation_language === 'fr' ? t('French first') : t('English first'),
   };
 
   useEffect(() => {
@@ -302,7 +305,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setPronunciationFeedback(null);
       return true;
     } catch {
-      setError('This flashcard set could not be loaded.');
+      setError(t('This flashcard set could not be loaded.'));
       return false;
     } finally {
       setLoadingSet(false);
@@ -315,7 +318,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     const suppliedTerms = customParsedTerms;
     if (generatingSet || (generationMode === 'theme' ? !topic : suppliedTerms.length === 0)) return;
     if (generationMode === 'terms' && suppliedTerms.length > MAX_FLASHCARD_TERMS) {
-      setError(`You entered ${suppliedTerms.length} terms. Remove ${suppliedTerms.length - MAX_FLASHCARD_TERMS} before generating.`);
+      setError(t('You entered {count} terms. Remove {excess} before generating.', { count: suppliedTerms.length, excess: suppliedTerms.length - MAX_FLASHCARD_TERMS }));
       return;
     }
 
@@ -346,7 +349,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       try {
         setSets(await getFlashcardSets());
       } catch {
-        setError('The flashcard set was created, but the list could not be refreshed. Reload the page to see it.');
+        setError(t('The flashcard set was created, but the list could not be refreshed. Reload the page to see it.'));
         return;
       }
 
@@ -393,7 +396,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
           if (target === 'extend') setExtendTermsText(appendTranscription);
           else setCustomTermsText(appendTranscription);
         } catch {
-          setAudioError('The vocabulary list could not be transcribed.');
+          setAudioError(t('The vocabulary list could not be transcribed.'));
         } finally {
           setVocabularyTranscribing(false);
         }
@@ -401,7 +404,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       recorder.start(250);
       setVocabularyRecording(true);
     } catch {
-      setAudioError('Microphone could not be started.');
+      setAudioError(t('Microphone could not be started.'));
       stopMediaStream(vocabularyStreamRef.current);
       vocabularyStreamRef.current = null;
       vocabularyRecorderRef.current = null;
@@ -419,7 +422,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     const terms = extendParsedTerms;
     if (terms.length === 0) return;
     if (terms.length > MAX_FLASHCARD_TERMS) {
-      setError(`You entered ${terms.length} terms. Remove ${terms.length - MAX_FLASHCARD_TERMS} before generating.`);
+      setError(t('You entered {count} terms. Remove {excess} before generating.', { count: terms.length, excess: terms.length - MAX_FLASHCARD_TERMS }));
       return;
     }
     setManagingSet(true);
@@ -430,7 +433,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       try {
         extended = await extendFlashcardSet(selectedSet.id, terms);
       } catch (extensionError) {
-        setError(flashcardRequestErrorMessage(extensionError, 'The new words could not be added.'));
+        setError(flashcardRequestErrorMessage(extensionError, t('The new words could not be added.')));
         return;
       }
 
@@ -438,7 +441,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       try {
         setSets(await getFlashcardSets());
       } catch {
-        setError('The words were added, but the set list could not be refreshed. Reload the page to see them.');
+        setError(t('The words were added, but the set list could not be refreshed. Reload the page to see them.'));
         return;
       }
 
@@ -466,7 +469,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
         state: firstExercise ? { openExerciseId: firstExercise.id } : undefined,
       });
     } catch {
-      setError('The vocabulary exercise could not be generated. Please try again.');
+      setError(t('The vocabulary exercise could not be generated. Please try again.'));
     } finally {
       setGeneratingExercise(false);
     }
@@ -484,7 +487,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setSets(await getFlashcardSets());
       await openSet(merged.id);
     } catch {
-      setError('The flashcard sets could not be merged.');
+      setError(t('The flashcard sets could not be merged.'));
     } finally {
       setManagingSet(false);
     }
@@ -492,7 +495,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
   const handleDeleteSet = async () => {
     if (!selectedSet?.is_editable || managingSet) return;
-    if (!window.confirm(`Delete “${selectedSet.title}” and its study progress?`)) return;
+    if (!window.confirm(t('Delete “{title}” and its study progress?', { title: selectedSet.title }))) return;
     setManagingSet(true);
     setError(null);
     try {
@@ -501,7 +504,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setManagementMode(null);
       setSets(await getFlashcardSets());
     } catch {
-      setError('The flashcard set could not be deleted.');
+      setError(t('The flashcard set could not be deleted.'));
     } finally {
       setManagingSet(false);
     }
@@ -527,7 +530,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       } : current);
       setEditingCard(null);
     } catch {
-      setError('The flashcard could not be saved.');
+      setError(t('The flashcard could not be saved.'));
     } finally {
       setManagingSet(false);
     }
@@ -535,7 +538,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
   const handleDeleteCard = async (card: Flashcard) => {
     if (!selectedSet?.is_editable || managingSet) return;
-    if (!window.confirm(`Delete “${card.front}” from this set?`)) return;
+    if (!window.confirm(t('Delete “{word}” from this set?', { word: card.front }))) return;
     setManagingSet(true);
     setError(null);
     try {
@@ -543,7 +546,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setSets(await getFlashcardSets());
       await openSet(selectedSet.id);
     } catch {
-      setError('The flashcard could not be deleted.');
+      setError(t('The flashcard could not be deleted.'));
     } finally {
       setManagingSet(false);
     }
@@ -558,7 +561,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     try {
       await playSpeech(cleanText, { style });
     } catch {
-      setAudioError('Audio could not be played.');
+      setAudioError(t('Audio could not be played.'));
     } finally {
       setSpeakingText(null);
     }
@@ -601,7 +604,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
           const feedback = await getPronunciationFeedback(targetText, audioBlob);
           setPronunciationFeedback(feedback);
         } catch {
-          setAudioError('Pronunciation feedback could not be created.');
+          setAudioError(t('Pronunciation feedback could not be created.'));
         } finally {
           setPronunciationLoading(false);
         }
@@ -610,7 +613,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       recorder.start(250);
       setPronunciationRecording(true);
     } catch {
-      setAudioError('Microphone could not be started.');
+      setAudioError(t('Microphone could not be started.'));
       stopMediaStream(pronunciationStreamRef.current);
       pronunciationStreamRef.current = null;
       pronunciationRecorderRef.current = null;
@@ -700,7 +703,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       setStudySummary(studySession.summary);
     } catch {
       setLastSavedCount(0);
-      setError('Progress could not be saved.');
+      setError(t('Progress could not be saved.'));
     } finally {
       setSavingProgress(false);
     }
@@ -737,7 +740,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     if (detailTab === 'example') {
       return (
         <p className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm leading-relaxed text-slate-200">
-          {card.example ?? 'No example available.'}
+          {card.example ?? t('No example available.')}
         </p>
       );
     }
@@ -748,7 +751,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
     if (entries.length === 0) {
       return (
         <p className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-500">
-          No entries available.
+          {t('No entries available.')}
         </p>
       );
     }
@@ -768,15 +771,15 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
   };
 
   if (loading) {
-    return <div className="text-slate-300">Loading flashcards...</div>;
+    return <div className="text-slate-300">{t('Loading flashcards...')}</div>;
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">Flashcards</h1>
+        <h1 className="mb-1 text-2xl font-bold text-white sm:text-3xl">{t('Flashcards')}</h1>
         <p className="text-slate-400 text-sm">
-          Learn vocabulary by topic, with examples for cases and tenses.
+          {t('Learn vocabulary by topic, with examples for cases and tenses.')}
         </p>
       </div>
 
@@ -795,7 +798,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
       {managementNotice && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-green-700/50 bg-green-900/25 px-4 py-3 text-sm text-green-200">
           <span>{managementNotice}</span>
-          <button type="button" onClick={() => setManagementNotice(null)} aria-label="Dismiss confirmation"
+          <button type="button" onClick={() => setManagementNotice(null)} aria-label={t('Dismiss confirmation')}
             className="rounded p-1 text-green-200 hover:bg-green-800/40">
             <X size={16} />
           </button>
@@ -810,16 +813,16 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 <Sparkles size={18} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Generate a new set</h2>
+                <h2 className="text-lg font-semibold text-white">{t('Generate a new set')}</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Let AI choose vocabulary for a theme, or provide your own German terms.
+                  {t('Let AI choose vocabulary for a theme, or provide your own German terms.')}
                 </p>
               </div>
             </div>
             <div className="mb-4 grid gap-2 rounded-xl bg-slate-900 p-1 sm:grid-cols-2">
               {([
-                ['theme', 'Generate from a theme'],
-                ['terms', 'Use my own words'],
+                ['theme', t('Generate from a theme')],
+                ['terms', t('Use my own words')],
               ] as Array<[GenerationMode, string]>).map(([mode, label]) => (
                 <button
                   key={mode}
@@ -842,13 +845,13 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 <input
                   value={generateTopic}
                   onChange={event => setGenerateTopic(event.target.value)}
-                  placeholder="Topic, e.g. work"
+                  placeholder={t('Topic, e.g. work')}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <input
                   value={generatePreciseTopic}
                   onChange={event => setGeneratePreciseTopic(event.target.value)}
-                  placeholder="Precise focus, e.g. job interview"
+                  placeholder={t('Precise focus, e.g. job interview')}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <input
@@ -856,7 +859,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   min={3}
                   max={30}
                   value={generateCount}
-                  aria-label="Number of cards"
+                  aria-label={t('Number of cards')}
                   onChange={event => setGenerateCount(Number(event.target.value))}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors focus:border-blue-500"
                 />
@@ -866,7 +869,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 <input
                   value={customSetName}
                   onChange={event => setCustomSetName(event.target.value)}
-                  placeholder="Set name (optional)"
+                  placeholder={t('Set name (optional)')}
                   className="w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <textarea
@@ -874,11 +877,11 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   onChange={event => setCustomTermsText(event.target.value)}
                   rows={4}
                   maxLength={3800}
-                  placeholder="German words or expressions, separated by commas or new lines"
+                  placeholder={t('German words or expressions, separated by commas or new lines')}
                   className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <p className="text-xs text-slate-500">
-                  Commas, semicolons, and new lines separate terms. Capitalization-only duplicates are included once.
+                  {t('Commas, semicolons, and new lines separate terms. Capitalization-only duplicates are included once.')}
                 </p>
                 <FlashcardTermPreview terms={customParsedTerms} />
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -897,18 +900,18 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                         ? <MicOff size={16} />
                         : <Mic size={16} />}
                     {vocabularyRecording
-                      ? 'Stop dictating'
+                      ? t('Stop dictating')
                       : vocabularyTranscribing
-                        ? 'Transcribing...'
-                        : 'Dictate words'}
+                        ? t('Transcribing...')
+                        : t('Dictate words')}
                   </button>
                   <span className={clsx(
                     'text-xs',
                     customTermCount > MAX_FLASHCARD_TERMS ? 'font-semibold text-red-300' : 'text-slate-400',
                   )}>
                     {customTermCount > MAX_FLASHCARD_TERMS
-                      ? `${customTermCount}/${MAX_FLASHCARD_TERMS} terms — remove ${customTermCount - MAX_FLASHCARD_TERMS} before generating.`
-                      : `${customTermCount}/${MAX_FLASHCARD_TERMS} terms detected — review the transcription before generating.`}
+                      ? t('{count}/{max} terms — remove {excess} before generating.', { count: customTermCount, max: MAX_FLASHCARD_TERMS, excess: customTermCount - MAX_FLASHCARD_TERMS })
+                      : t('{count}/{max} terms detected — review the transcription before generating.', { count: customTermCount, max: MAX_FLASHCARD_TERMS })}
                   </span>
                 </div>
               </div>
@@ -916,14 +919,14 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
             <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
               <label className="grid gap-1 text-xs font-semibold text-slate-300">
-                Translation on the back
+                {t('Translation on the back')}
                 <select
                   value={translationLanguage}
                   onChange={event => setTranslationLanguage(event.target.value as FlashcardTranslationLanguage)}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-normal text-white outline-none focus:border-blue-500"
                 >
-                  <option value="en">English</option>
-                  <option value="fr">French</option>
+                  <option value="en">{t('English')}</option>
+                  <option value="fr">{t('French')}</option>
                 </select>
               </label>
               <button
@@ -933,7 +936,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles size={16} />
-                {generatingSet ? 'Generating...' : 'Generate'}
+                {generatingSet ? t('Generating...') : t('Generate')}
               </button>
             </div>
           </div>
@@ -951,12 +954,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   <div>
                     <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-blue-300">
                       <BookMarked size={14} />
-                      {set.topic} · {set.level} · {translationLanguageLabels[set.translation_language ?? 'en']}
+                      {set.topic} · {set.level} · {t(translationLanguageLabels[set.translation_language ?? 'en'])}
                     </div>
                     <h2 className="text-lg font-semibold text-white">{set.title}</h2>
                   </div>
                   <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200">
-                    {set.card_count} cards
+                    {t('{count} cards', { count: set.card_count })}
                   </span>
                 </div>
                 <p className="text-sm leading-relaxed text-slate-400">{set.description}</p>
@@ -973,12 +976,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
             >
               <ArrowLeft size={16} />
-              Sets
+              {t('Sets')}
             </button>
             <div className="min-w-0 text-right">
               <div className="truncate text-sm font-semibold text-white">{selectedSet.title}</div>
               <div className="text-xs text-slate-400">
-                {studyModeLabels[studyMode]} · {activeQueueCount} left · {progressLabel} done
+                {t(studyModeLabels[studyMode])} · {t('{count} left', { count: activeQueueCount })} · {t('{progress} done', { progress: progressLabel })}
               </div>
             </div>
           </div>
@@ -990,7 +993,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 onClick={() => setManagementMode(current => current === 'extend' ? null : 'extend')}
                 className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
               >
-                <Plus size={15} /> Add words
+                <Plus size={15} /> {t('Add words')}
               </button>
               {selectedSet.is_editable && (
                 <>
@@ -1002,7 +1005,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                     }}
                     className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
                   >
-                    <Pencil size={15} /> Edit cards
+                    <Pencil size={15} /> {t('Edit cards')}
                   </button>
                 </>
               )}
@@ -1011,14 +1014,14 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 onClick={() => setManagementMode(current => current === 'merge' ? null : 'merge')}
                 className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-blue-500 hover:text-white"
               >
-                <GitMerge size={15} /> Merge with another set
+                <GitMerge size={15} /> {t('Merge with another set')}
               </button>
               <button
                 type="button"
                 onClick={() => setManagementMode(current => current === 'practice' ? null : 'practice')}
                 className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-600/70 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400 hover:text-white"
               >
-                <BookOpenCheck size={15} /> Practise vocabulary
+                <BookOpenCheck size={15} /> {t('Practise vocabulary')}
               </button>
               {selectedSet.is_editable && (
                 <button
@@ -1027,21 +1030,21 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   disabled={managingSet}
                   className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-700/70 px-3 py-2 text-sm text-red-300 hover:bg-red-900/30 disabled:opacity-50"
                 >
-                  <Trash2 size={15} /> Delete set
+                  <Trash2 size={15} /> {t('Delete set')}
                 </button>
               )}
             </div>
 
             {!selectedSet.is_editable && (
               <p className="mt-3 text-xs text-slate-400">
-                This is a shared set. Adding words or merging creates a personal set; the original remains unchanged.
+                {t('This is a shared set. Adding words or merging creates a personal set; the original remains unchanged.')}
               </p>
             )}
 
             {managementMode === 'practice' && (
               <div className="mt-4 space-y-3 border-t border-slate-700 pt-4">
                 <div>
-                  <div className="text-sm font-semibold text-white">Create a saved gap exercise</div>
+                  <div className="text-sm font-semibold text-white">{t('Create a saved gap exercise')}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {[10, 20].filter(count => count < selectedSet.cards.length).map(count => (
@@ -1078,7 +1081,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                           : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500',
                       )}
                     >
-                      Custom…
+                      {t('Custom…')}
                     </button>
                   )}
                   <button
@@ -1094,11 +1097,11 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                         : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500',
                     )}
                   >
-                    All ({selectedSet.cards.length})
+                    {t('All ({count})', { count: selectedSet.cards.length })}
                   </button>
                   {customClozeOpen && (
                     <label className="flex items-center gap-2 text-xs text-slate-300">
-                      Cards
+                      {t('Cards')}
                       <input
                         type="number"
                         min={1}
@@ -1121,7 +1124,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                     className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     {generatingExercise && <Loader2 size={15} className="animate-spin" />}
-                    {generatingExercise ? 'Creating text...' : 'Create exercise'}
+                    {generatingExercise ? t('Creating text...') : t('Create exercise')}
                   </button>
                 </div>
               </div>
@@ -1133,11 +1136,11 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   value={extendTermsText}
                   onChange={event => setExtendTermsText(event.target.value)}
                   rows={3}
-                  placeholder="New German words or expressions, separated by commas or new lines"
+                  placeholder={t('New German words or expressions, separated by commas or new lines')}
                   className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <p className="text-xs text-slate-500">
-                  Commas, semicolons, and new lines separate terms. Capitalization-only duplicates are included once.
+                  {t('Commas, semicolons, and new lines separate terms. Capitalization-only duplicates are included once.')}
                 </p>
                 <FlashcardTermPreview terms={extendParsedTerms} />
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1156,15 +1159,15 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                         : vocabularyRecording
                           ? <MicOff size={15} />
                           : <Mic size={15} />}
-                      {vocabularyRecording ? 'Stop dictating' : vocabularyTranscribing ? 'Transcribing...' : 'Dictate words'}
+                      {vocabularyRecording ? t('Stop dictating') : vocabularyTranscribing ? t('Transcribing...') : t('Dictate words')}
                     </button>
                     <span className={clsx(
                       'text-xs',
                       extendTermCount > MAX_FLASHCARD_TERMS ? 'font-semibold text-red-300' : 'text-slate-400',
                     )}>
                       {extendTermCount > MAX_FLASHCARD_TERMS
-                        ? `${extendTermCount}/${MAX_FLASHCARD_TERMS} terms — remove ${extendTermCount - MAX_FLASHCARD_TERMS}.`
-                        : `${extendTermCount}/${MAX_FLASHCARD_TERMS} terms`}
+                        ? t('{count}/{max} terms — remove {excess}.', { count: extendTermCount, max: MAX_FLASHCARD_TERMS, excess: extendTermCount - MAX_FLASHCARD_TERMS })
+                        : t('{count}/{max} terms', { count: extendTermCount, max: MAX_FLASHCARD_TERMS })}
                     </span>
                   </div>
                   <button
@@ -1173,7 +1176,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                     disabled={managingSet || vocabularyTranscribing || extendTermCount === 0 || extendTermCount > MAX_FLASHCARD_TERMS}
                     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                   >
-                    {managingSet ? 'Adding...' : 'Generate and add'}
+                    {managingSet ? t('Adding...') : t('Generate and add')}
                   </button>
                 </div>
               </div>
@@ -1186,13 +1189,13 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   onChange={event => setMergeSetId(event.target.value)}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500"
                 >
-                  <option value="">Choose a set with a {translationLanguageLabels[selectedSet.translation_language]} back</option>
+                  <option value="">{selectedSet.translation_language === 'fr' ? t('Choose a set with a French back') : t('Choose a set with an English back')}</option>
                   {mergeCandidates.map(set => <option key={set.id} value={set.id}>{set.title} ({set.card_count})</option>)}
                 </select>
                 <input
                   value={mergeTitle}
                   onChange={event => setMergeTitle(event.target.value)}
-                  placeholder="Name for merged set (optional)"
+                  placeholder={t('Name for merged set (optional)')}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <button
@@ -1201,10 +1204,10 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   disabled={!mergeSetId || managingSet}
                   className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                 >
-                  {managingSet ? 'Merging...' : 'Create merged set'}
+                  {managingSet ? t('Merging...') : t('Create merged set')}
                 </button>
                 {mergeCandidates.length === 0 && (
-                  <p className="text-xs text-slate-400 md:col-span-3">No other set uses the same back language.</p>
+                  <p className="text-xs text-slate-400 md:col-span-3">{t('No other set uses the same back language.')}</p>
                 )}
               </div>
             )}
@@ -1218,20 +1221,20 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                         <input
                           value={editingCard.front}
                           onChange={event => setEditingCard(current => current ? { ...current, front: event.target.value } : current)}
-                          placeholder="German front"
+                          placeholder={t('German front')}
                           className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                         />
                         <input
                           value={editingCard.back}
                           onChange={event => setEditingCard(current => current ? { ...current, back: event.target.value } : current)}
-                          placeholder={`${translationLanguageLabels[selectedSet.translation_language]} back`}
+                          placeholder={selectedSet.translation_language === 'fr' ? t('French back') : t('English back')}
                           className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                         />
                         <textarea
                           value={editingCard.example ?? ''}
                           onChange={event => setEditingCard(current => current ? { ...current, example: event.target.value } : current)}
                           rows={2}
-                          placeholder="German example sentence"
+                          placeholder={t('German example sentence')}
                           className="w-full resize-y rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                         />
                         <input
@@ -1240,18 +1243,18 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                             ...current,
                             tags: event.target.value.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 8),
                           } : current)}
-                          placeholder="Tags, separated by commas"
+                          placeholder={t('Tags, separated by commas')}
                           className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                         />
                         <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => setEditingCard(null)} className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
+                          <button type="button" onClick={() => setEditingCard(null)} className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-white">{t('Cancel')}</button>
                           <button
                             type="button"
                             onClick={() => void handleSaveCard()}
                             disabled={managingSet || !editingCard.front.trim() || !editingCard.back.trim()}
                             className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                           >
-                            {managingSet ? 'Saving...' : 'Save card'}
+                            {managingSet ? t('Saving...') : t('Save card')}
                           </button>
                         </div>
                       </div>
@@ -1262,8 +1265,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                           <div className="truncate text-xs text-slate-400">{card.back}</div>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          <button type="button" onClick={() => setEditingCard({ ...card })} className="rounded-lg p-2 text-slate-300 hover:bg-slate-700 hover:text-white" title="Edit card"><Pencil size={15} /></button>
-                          <button type="button" onClick={() => void handleDeleteCard(card)} disabled={managingSet} className="rounded-lg p-2 text-red-300 hover:bg-red-900/30 disabled:opacity-50" title="Delete card"><Trash2 size={15} /></button>
+                          <button type="button" onClick={() => setEditingCard({ ...card })} className="rounded-lg p-2 text-slate-300 hover:bg-slate-700 hover:text-white" title={t('Edit card')}><Pencil size={15} /></button>
+                          <button type="button" onClick={() => void handleDeleteCard(card)} disabled={managingSet} className="rounded-lg p-2 text-red-300 hover:bg-red-900/30 disabled:opacity-50" title={t('Delete card')}><Trash2 size={15} /></button>
                         </div>
                       </div>
                     )}
@@ -1275,7 +1278,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
 
           <div className="order-3 flex items-center justify-end gap-3 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 sm:order-none sm:justify-between sm:rounded-2xl sm:px-4 sm:py-3">
             <div className="hidden text-sm text-slate-300 sm:block">
-              Practice the cards first, or start a conversation with this vocabulary.
+              {t('Practice the cards first, or start a conversation with this vocabulary.')}
             </div>
             <button
               type="button"
@@ -1283,7 +1286,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
             >
               <MessageSquare size={16} />
-              Start conversation
+              {t('Start conversation')}
             </button>
           </div>
 
@@ -1307,7 +1310,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                     : 'text-slate-300 hover:bg-slate-700 hover:text-white',
                 )}
               >
-                {studyModeLabels[mode]}
+                {t(studyModeLabels[mode])}
               </button>
             ))}
           </div>
@@ -1315,12 +1318,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
           <div className="order-5 flex items-center justify-between gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 sm:order-none sm:rounded-2xl sm:px-4 sm:py-3">
             <div className="truncate text-xs text-slate-300 sm:text-sm">
               {savingProgress
-                ? 'Saving session...'
+                ? t('Saving session...')
                 : lastSavedCount > 0 && unsavedCount === 0
-                  ? 'Session saved.'
+                  ? t('Session saved.')
                   : unsavedCount > 0
-                    ? 'Session not saved.'
-                    : 'No ratings in this session yet.'}
+                    ? t('Session not saved.')
+                    : t('No ratings in this session yet.')}
             </div>
             <button
               type="button"
@@ -1334,12 +1337,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
               )}
             >
               {savingProgress
-                ? 'Saving...'
+                ? t('Saving...')
                 : unsavedCount > 0
-                  ? 'Save progress'
+                  ? t('Save progress')
                   : lastSavedCount > 0
-                    ? 'Saved'
-                    : 'No changes'}
+                    ? t('Saved')
+                    : t('No changes')}
             </button>
           </div>
 
@@ -1355,12 +1358,12 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   ))}
                 </div>
                 <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs text-slate-300">
-                  {activeQueueCount} left
+                  {t('{count} left', { count: activeQueueCount })}
                 </span>
               </div>
 
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-300">Start side</div>
+                <div className="text-sm font-semibold text-slate-300">{t('Start side')}</div>
                 <div className="grid w-full grid-cols-2 gap-1.5 sm:w-auto sm:gap-2">
                   {(Object.keys(cardStartSideLabels) as CardStartSide[]).map(side => (
                     <button
@@ -1389,10 +1392,10 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                 className="flex min-h-48 w-full flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-6 text-center transition-colors hover:border-blue-500/50 sm:min-h-72 sm:rounded-2xl sm:px-6 sm:py-10"
               >
                 <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {showBack ? 'Back' : 'Front'}
+                  {showBack ? t('Back') : t('Front')}
                 </div>
                 <div className="text-3xl font-bold text-white sm:text-4xl">{showBack ? currentCard.back : currentCard.front}</div>
-                <div className="mt-5 text-sm text-slate-500">Click to flip</div>
+                <div className="mt-5 text-sm text-slate-500">{t('Click to flip')}</div>
               </button>
 
               <div className="mt-4 flex items-center justify-between gap-3">
@@ -1402,14 +1405,14 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
                 >
                   <ArrowLeft size={16} />
-                  Previous card
+                  {t('Previous card')}
                 </button>
                 <button
                   type="button"
                   onClick={() => moveCard(1)}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
                 >
-                  Skip card
+                  {t('Skip card')}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -1424,7 +1427,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                   {speakingText === visibleCardText
                     ? <Loader2 size={16} className="animate-spin" />
                     : <Volume2 size={16} />}
-                  {showBack ? 'Listen to back' : 'Listen to front'}
+                  {showBack ? t('Listen to back') : t('Listen to front')}
                 </button>
                 <button
                   type="button"
@@ -1443,21 +1446,21 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                       ? <MicOff size={16} />
                       : <Mic size={16} />}
                   {pronunciationRecording
-                    ? 'Stop recording'
+                    ? t('Stop recording')
                     : pronunciationLoading
-                      ? 'Checking...'
-                      : 'Practice pronunciation'}
+                      ? t('Checking...')
+                      : t('Practice pronunciation')}
                 </button>
               </div>
 
               {(pronunciationRecording || pronunciationFeedback) && (
                 <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3">
                   {pronunciationRecording ? (
-                    <div className="text-sm text-red-300">Recording... say the German word.</div>
+                    <div className="text-sm text-red-300">{t('Recording... say the German word.')}</div>
                   ) : pronunciationFeedback && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-semibold text-white">Pronunciation feedback</div>
+                        <div className="text-sm font-semibold text-white">{t('Pronunciation feedback')}</div>
                         <span className={clsx(
                           'rounded-full px-2.5 py-1 text-xs font-bold',
                           pronunciationFeedback.score >= 80
@@ -1470,7 +1473,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                         </span>
                       </div>
                       <div className="text-xs text-slate-400">
-                        Detected: <span className="text-slate-200">{pronunciationFeedback.transcribed_text || 'nothing'}</span>
+                        {t('Detected:')} <span className="text-slate-200">{pronunciationFeedback.transcribed_text || t('nothing')}</span>
                       </div>
                       <p className="text-sm text-slate-300">{pronunciationFeedback.feedback}</p>
                       <p className="text-xs text-cyan-200">{pronunciationFeedback.practice_tip}</p>
@@ -1491,8 +1494,8 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                       option.className,
                     )}
                   >
-                    <div className="text-xs font-semibold sm:text-sm">{option.label}</div>
-                    <div className="mt-1 hidden text-[11px] leading-tight text-slate-400 sm:block">{option.hint}</div>
+                    <div className="text-xs font-semibold sm:text-sm">{t(option.label)}</div>
+                    <div className="mt-1 hidden text-[11px] leading-tight text-slate-400 sm:block">{t(option.hint)}</div>
                   </button>
                 ))}
               </div>
@@ -1501,7 +1504,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-3 sm:rounded-2xl sm:p-5">
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
                 <Layers size={16} />
-                Usage
+                {t('Usage')}
               </div>
               <div className="mb-4 grid grid-cols-3 gap-2">
                 {(Object.keys(detailLabels) as DetailTab[]).map(tab => (
@@ -1517,7 +1520,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                       !hasDetails(currentCard, tab) && detailTab !== tab && 'opacity-60'
                     )}
                   >
-                    {detailLabels[tab]}
+                    {t(detailLabels[tab])}
                   </button>
                 ))}
               </div>
@@ -1533,7 +1536,7 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
                     {speakingText === currentCard.example
                       ? <Loader2 size={14} className="animate-spin" />
                       : <Volume2 size={14} />}
-                    Listen to example
+                    {t('Listen to example')}
                   </button>
                 )}
               </div>
@@ -1543,21 +1546,21 @@ export const FlashcardsPage: React.FC<Props> = ({ user }) => {
             <div className="order-2 rounded-xl border border-slate-700 bg-slate-800 p-5 sm:order-none">
               <div className="text-sm font-semibold text-white">
                 {selectedSet.cards.length === 0
-                  ? 'This set contains no cards.'
+                  ? t('This set contains no cards.')
                   : initialQueueCount === 0
-                    ? 'No cards for this view.'
-                    : 'Session complete.'}
+                    ? t('No cards for this view.')
+                    : t('Session complete.')}
               </div>
               <div className="mt-1 text-sm text-slate-400">
                 {selectedSet.cards.length === 0
                   ? ''
                   : initialQueueCount === 0
-                    ? 'Choose another view if you still want to study.'
+                    ? t('Choose another view if you still want to study.')
                     : savingProgress
-                      ? 'Your progress is being saved automatically.'
+                      ? t('Your progress is being saved automatically.')
                       : lastSavedCount > 0 && unsavedCount === 0
-                        ? 'Your progress was saved automatically.'
-                        : 'Your progress will be saved automatically.'}
+                        ? t('Your progress was saved automatically.')
+                        : t('Your progress will be saved automatically.')}
               </div>
             </div>
           )}

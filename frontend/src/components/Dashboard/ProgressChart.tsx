@@ -4,10 +4,12 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import type { TimelineEntry } from '../../types';
+import { useI18n } from '../../i18n';
 
 interface Props { timeline: TimelineEntry[]; series?: 'all' | 'score' | 'words'; }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
+  const { t } = useI18n();
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs shadow-xl">
@@ -17,8 +19,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
           <span>{p.name}</span>
           <span className="font-bold">
             {p.value != null ? p.value : '—'}
-            {p.dataKey === 'score' && p.value != null ? ' pts' : ''}
-            {p.dataKey === 'words' && p.value != null ? ' words' : ''}
+            {p.dataKey === 'score' && p.value != null ? ` ${t('pts')}` : ''}
+            {p.dataKey === 'words' && p.value != null ? ` ${t('words')}` : ''}
           </span>
         </div>
       ))}
@@ -27,6 +29,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const ProgressChart: React.FC<Props> = ({ timeline, series = 'all' }) => {
+  const { t: translate } = useI18n();
   const data = timeline.map((t, i) => ({
     name: `G${i + 1}`,
     topic: t.topic.length > 22 ? t.topic.slice(0, 22) + '…' : t.topic,
@@ -66,7 +69,7 @@ export const ProgressChart: React.FC<Props> = ({ timeline, series = 'all' }) => 
         {series !== 'score' && <Bar
           yAxisId="length"
           dataKey="words"
-          name="Words"
+          name={translate('Words')}
           fill="#14b8a6"
           opacity={0.7}
           radius={[3, 3, 0, 0]}
@@ -75,7 +78,7 @@ export const ProgressChart: React.FC<Props> = ({ timeline, series = 'all' }) => 
         {series !== 'words' && <Line
           yAxisId="score"
           dataKey="score"
-          name="Score"
+          name={translate('Score')}
           stroke="#3b82f6"
           strokeWidth={2}
           dot={{ fill: '#3b82f6', r: 4 }}

@@ -18,6 +18,7 @@ import type { DiscussionMode, Message, SelectedConversation, User } from '../../
 import { createMediaRecorder, playSpeech, stopMediaStream } from '../../utils/audio';
 import { RealtimeDiscussion, type RealtimeState } from '../../utils/realtime';
 import { MessageBubble } from './MessageBubble';
+import { useI18n } from '../../i18n';
 
 interface Props { user: User; }
 
@@ -38,6 +39,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useI18n();
   const { topic } = ((location.state as { topic?: SelectedConversation }) || {});
   const routeId = sessionId && /^\d+$/.test(sessionId) ? Number(sessionId) : null;
   const topicText = topic
@@ -81,7 +83,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
         setActiveSessionId(session.id);
         navigate(`/chat/${session.id}`, { replace: true, state: { topic } });
       })
-      .catch(() => setError('The conversation could not be created.'))
+      .catch(() => setError(t('The conversation could not be created.')))
       .finally(() => setBusy(false));
   }, [activeSessionId, navigate, topic, topicText]);
 
@@ -141,7 +143,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
         const opening = await createOpeningMessage(activeSessionId);
         setMessages([{ role: 'assistant', content: opening.reply }]);
       } catch {
-        setError('The opening message could not be generated.');
+        setError(t('The opening message could not be generated.'));
       } finally {
         setBusy(false);
       }
@@ -149,7 +151,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
   };
 
   const closeRealtimeAtLimit = async () => {
-    setError('The seven-minute voice limit was reached. Preparing your review…');
+    setError(t('The seven-minute voice limit was reached. Preparing your review…'));
     await finishSession();
   };
 
@@ -174,7 +176,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
     } catch (startError) {
       if (startError instanceof Error && startError.name === 'AbortError') return;
       await startControlled();
-      setError('Live voice was unavailable, so this session reopened in controlled mode.');
+      setError(t('Live voice was unavailable, so this session reopened in controlled mode.'));
     }
   };
 
@@ -220,7 +222,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
         );
       }
     } catch (streamError) {
-      if (!controller.signal.aborted) setError('The response stream stopped. Your message was saved; try again.');
+      if (!controller.signal.aborted) setError(t('The response stream stopped. Your message was saved; try again.'));
     } finally {
       streamAbortRef.current = null;
       setBusy(false);
@@ -248,7 +250,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
           const result = await transcribeAudio(blob);
           await sendText(result.text);
         } catch {
-          setError('Audio could not be transcribed.');
+          setError(t('Audio could not be transcribed.'));
         } finally {
           setTranscribing(false);
         }
@@ -256,7 +258,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
       recorder.start(250);
       setRecording(true);
     } catch {
-      setError('Microphone access failed.');
+      setError(t('Microphone access failed.'));
     }
   };
 
@@ -285,7 +287,7 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
       await endSession(activeSessionId, saveCategory);
       navigate(`/sessions/${activeSessionId}/review`, { replace: true });
     } catch {
-      setError('The session could not be closed. Please retry.');
+      setError(t('The session could not be closed. Please retry.'));
       setBusy(false);
       setShowClose(false);
     }
@@ -299,21 +301,21 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
     navigate('/topics');
   };
 
-  const statusLabel = realtimeState === 'connecting' ? 'Connecting…'
-    : realtimeState === 'speaking' ? 'Tutor speaking — interrupt at any time'
-      : realtimeState === 'thinking' ? 'Thinking…' : 'Listening';
+  const statusLabel = realtimeState === 'connecting' ? t('Connecting…')
+    : realtimeState === 'speaking' ? t('Tutor speaking — interrupt at any time')
+      : realtimeState === 'thinking' ? t('Thinking…') : t('Listening');
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-5.5rem)] max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 md:h-[calc(100dvh-10.5rem)] md:rounded-2xl">
       <header className="flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-900 px-3 py-2 sm:px-5 sm:py-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-white sm:text-base">{topic?.title ?? 'Conversation'}</div>
-          <div className="hidden text-xs text-slate-400 sm:block">{user.level} · Feedback stays hidden until the review</div>
+          <div className="truncate text-sm font-semibold text-white sm:text-base">{topic ? t(topic.title) : t('Conversation')}</div>
+          <div className="hidden text-xs text-slate-400 sm:block">{user.level} · {t('Feedback stays hidden until the review')}</div>
         </div>
         <div className="flex items-center gap-3">
           {mode === 'controlled' && (
             <label className="hidden items-center gap-2 text-xs text-slate-400 sm:flex">
-              Voice
+              {t('Voice')}
               <select
                 value={selectedVoice}
                 onChange={event => setSelectedVoice(event.target.value)}
@@ -323,17 +325,17 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
               </select>
             </label>
           )}
-          <button onClick={() => setShowClose(true)} className="rounded-lg bg-red-700 px-3 py-1.5 text-sm hover:bg-red-600 sm:px-4 sm:py-2">Close</button>
+          <button onClick={() => setShowClose(true)} className="rounded-lg bg-red-700 px-3 py-1.5 text-sm hover:bg-red-600 sm:px-4 sm:py-2">{t('Close')}</button>
         </div>
       </header>
 
       {!mode ? (
         <div className="flex flex-1 items-center justify-center overflow-y-auto p-3 sm:p-6">
           <div className="w-full max-w-2xl">
-            <h1 className="text-center text-xl font-semibold sm:text-2xl">How would you like to talk?</h1>
-            <p className="mt-2 text-center text-sm text-slate-400">Both modes receive the same detailed review after the session.</p>
+            <h1 className="text-center text-xl font-semibold sm:text-2xl">{t('How would you like to talk?')}</h1>
+            <p className="mt-2 text-center text-sm text-slate-400">{t('Both modes receive the same detailed review after the session.')}</p>
             <div className="mx-auto mt-4 max-w-xs sm:mt-6">
-              <label className="block text-sm font-medium text-slate-200" htmlFor="discussion-voice">Tutor voice</label>
+              <label className="block text-sm font-medium text-slate-200" htmlFor="discussion-voice">{t('Tutor voice')}</label>
               <select
                 id="discussion-voice"
                 value={selectedVoice}
@@ -343,18 +345,18 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
               >
                 {VOICE_OPTIONS.map(voice => <option key={voice} value={voice}>{voice}</option>)}
               </select>
-              <p className="mt-1.5 text-xs text-slate-500">Used for live voice and optional text-to-speech. Voices are AI-generated.</p>
+              <p className="mt-1.5 text-xs text-slate-500">{t('Used for live voice and optional text-to-speech. Voices are AI-generated.')}</p>
             </div>
             <div className="mt-4 grid gap-2 sm:mt-8 sm:gap-4 md:grid-cols-2">
               <button onClick={startRealtime} disabled={!activeSessionId || busy} className="rounded-xl border border-cyan-600/60 bg-cyan-950/40 p-4 text-left hover:bg-cyan-950/70 disabled:opacity-40 sm:rounded-2xl sm:p-6">
                 <Headphones className="mb-2 text-cyan-300 sm:mb-4" />
-                <div className="font-semibold">Fluid voice</div>
-                <div className="mt-2 text-sm text-slate-300">Natural hands-free speech, automatic turns and interruptions. Voice only, up to seven minutes.</div>
+                <div className="font-semibold">{t('Fluid voice')}</div>
+                <div className="mt-2 text-sm text-slate-300">{t('Natural hands-free speech, automatic turns and interruptions. Voice only, up to seven minutes.')}</div>
               </button>
               <button onClick={startControlled} disabled={!activeSessionId || busy} className="rounded-xl border border-blue-600/60 bg-blue-950/40 p-4 text-left hover:bg-blue-950/70 disabled:opacity-40 sm:rounded-2xl sm:p-6">
                 <Keyboard className="mb-2 text-blue-300 sm:mb-4" />
-                <div className="font-semibold">Controlled</div>
-                <div className="mt-2 text-sm text-slate-300">Type or push to talk. Fast streamed text replies; audio playback only when requested.</div>
+                <div className="font-semibold">{t('Controlled')}</div>
+                <div className="mt-2 text-sm text-slate-300">{t('Type or push to talk. Fast streamed text replies; audio playback only when requested.')}</div>
               </button>
             </div>
             {error && <p className="mt-5 text-center text-sm text-red-300">{error}</p>}
@@ -366,33 +368,33 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
             {realtimeState === 'connecting' ? <Loader2 className="animate-spin" size={44} /> : <Mic size={44} />}
           </div>
           <div className="mt-5 text-lg font-medium">{statusLabel}</div>
-          {remainingSeconds !== null && <div className="mt-1 text-sm text-slate-400">{Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')} remaining</div>}
+          {remainingSeconds !== null && <div className="mt-1 text-sm text-slate-400">{t('{time} remaining', { time: `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}` })}</div>}
           {error && <div className="mt-4 rounded-lg bg-red-950/60 px-4 py-2 text-sm text-red-200">{error}</div>}
-          <button onClick={() => setShowTranscript(value => !value)} className="mt-4 text-sm text-cyan-300 hover:text-cyan-200 sm:mt-6">{showTranscript ? 'Hide transcript' : 'Show transcript'}</button>
+          <button onClick={() => setShowTranscript(value => !value)} className="mt-4 text-sm text-cyan-300 hover:text-cyan-200 sm:mt-6">{showTranscript ? t('Hide transcript') : t('Show transcript')}</button>
           {showTranscript && (
             <div className="mt-3 max-h-52 w-full max-w-xl overflow-y-auto rounded-xl bg-slate-900 p-4">
-              {messages.map((message, index) => <p key={message.id ?? index} className="mb-2 text-sm"><span className="font-semibold text-slate-400">{message.role === 'user' ? 'You' : 'Tutor'}:</span> {message.content}</p>)}
-              {assistantDraft && <p className="text-sm text-slate-300"><span className="font-semibold text-slate-400">Tutor:</span> {assistantDraft}</p>}
+              {messages.map((message, index) => <p key={message.id ?? index} className="mb-2 text-sm"><span className="font-semibold text-slate-400">{message.role === 'user' ? t('You') : t('Tutor')}:</span> {message.content}</p>)}
+              {assistantDraft && <p className="text-sm text-slate-300"><span className="font-semibold text-slate-400">{t('Tutor')}:</span> {assistantDraft}</p>}
             </div>
           )}
-          <button onClick={() => setShowClose(true)} className="mt-5 flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 hover:bg-red-600 sm:mt-8 sm:px-5 sm:py-3"><PhoneOff size={18} /> End voice session</button>
+          <button onClick={() => setShowClose(true)} className="mt-5 flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 hover:bg-red-600 sm:mt-8 sm:px-5 sm:py-3"><PhoneOff size={18} /> {t('End voice session')}</button>
         </div>
       ) : (
         <>
           <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:space-y-4 sm:px-5 sm:py-4">
             {messages.map((message, index) => (
-              <MessageBubble key={message.id ?? index} message={message} showFeedback={false} onSpeak={message.role === 'assistant' && !busy ? text => void playSpeech(text, { voice: selectedVoice }).catch(() => setError('Audio could not be played.')) : undefined} />
+              <MessageBubble key={message.id ?? index} message={message} showFeedback={false} onSpeak={message.role === 'assistant' && !busy ? text => void playSpeech(text, { voice: selectedVoice }).catch(() => setError(t('Audio could not be played.'))) : undefined} />
             ))}
-            {busy && <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={15} className="animate-spin" /> Claude is writing…</div>}
+            {busy && <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={15} className="animate-spin" /> {t('Claude is writing…')}</div>}
             <div ref={bottomRef} />
           </div>
           <div className="border-t border-slate-700 bg-slate-900 p-2 sm:p-4">
             <div className="flex items-end gap-2 sm:gap-3">
-              <textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(input); } }} disabled={busy || transcribing} rows={1} placeholder="Write in German…" className="min-h-11 flex-1 resize-none rounded-xl border border-slate-600 bg-slate-700 px-3 py-3 text-sm outline-none focus:border-blue-500 sm:px-4" />
-              <button onClick={toggleRecording} disabled={busy || transcribing} className={clsx('rounded-xl p-3', recording ? 'bg-red-600' : 'bg-slate-700', (busy || transcribing) && 'opacity-40')} title="Push to talk">{transcribing ? <Loader2 size={18} className="animate-spin" /> : recording ? <MicOff size={18} /> : <Mic size={18} />}</button>
-              <button onClick={() => void sendText(input)} disabled={!input.trim() || busy || transcribing} className="rounded-xl bg-blue-600 p-3 disabled:opacity-40"><Send size={18} /></button>
+              <textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(input); } }} disabled={busy || transcribing} rows={1} placeholder={t('Write in German…')} className="min-h-11 flex-1 resize-none rounded-xl border border-slate-600 bg-slate-700 px-3 py-3 text-sm outline-none focus:border-blue-500 sm:px-4" />
+              <button onClick={toggleRecording} disabled={busy || transcribing} className={clsx('rounded-xl p-3', recording ? 'bg-red-600' : 'bg-slate-700', (busy || transcribing) && 'opacity-40')} title={t('Push to talk')} aria-label={t('Push to talk')}>{transcribing ? <Loader2 size={18} className="animate-spin" /> : recording ? <MicOff size={18} /> : <Mic size={18} />}</button>
+              <button onClick={() => void sendText(input)} disabled={!input.trim() || busy || transcribing} className="rounded-xl bg-blue-600 p-3 disabled:opacity-40" aria-label={t('Send')}><Send size={18} /></button>
             </div>
-            <div className={clsx('mt-1 truncate text-[11px] sm:mt-2 sm:text-xs', error ? 'text-red-300' : 'text-slate-500')}>{error ?? (recording ? 'Recording… press again to send.' : 'Type or push to talk. Use the speaker button only when you want audio.')}</div>
+            <div className={clsx('mt-1 truncate text-[11px] sm:mt-2 sm:text-xs', error ? 'text-red-300' : 'text-slate-500')}>{error ?? (recording ? t('Recording… press again to send.') : t('Type or push to talk. Use the speaker button only when you want audio.'))}</div>
           </div>
         </>
       )}
@@ -400,31 +402,31 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
       {showClose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4">
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 sm:p-6">
-            <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">End this conversation?</h2><p className="mt-1 text-sm text-slate-400">Saving opens the review immediately while analysis finishes in the background.</p></div><button onClick={() => setShowClose(false)}><X size={18} /></button></div>
+            <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">{t('End this conversation?')}</h2><p className="mt-1 text-sm text-slate-400">{t('Saving opens the review immediately while analysis finishes in the background.')}</p></div><button onClick={() => setShowClose(false)} aria-label={t('Close')}><X size={18} /></button></div>
             {topic?.isFreeTopic && userTurnsRef.current > 0 && (
               <div className="mt-5 rounded-xl border border-slate-700 bg-slate-800 p-4">
-                <div className="text-sm font-semibold text-white">Save this free topic under</div>
+                <div className="text-sm font-semibold text-white">{t('Save this free topic under')}</div>
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setSaveCategoryMode('existing')}
                     className={clsx('rounded-lg px-2 py-2 text-xs transition-colors', saveCategoryMode === 'existing' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700')}
                   >
-                    Existing category
+                    {t('Existing category')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setSaveCategoryMode('free')}
                     className={clsx('rounded-lg px-2 py-2 text-xs transition-colors', saveCategoryMode === 'free' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700')}
                   >
-                    Free discussions
+                    {t('Free discussions')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setSaveCategoryMode('custom')}
                     className={clsx('rounded-lg px-2 py-2 text-xs transition-colors', saveCategoryMode === 'custom' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700')}
                   >
-                    New category
+                    {t('New category')}
                   </button>
                 </div>
                 {saveCategoryMode === 'existing' && (
@@ -433,8 +435,8 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
                     onChange={event => setSelectedSaveCategory(event.target.value)}
                     className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                   >
-                    {topicCategories.map(category => <option key={category} value={category}>{category}</option>)}
-                    {topicCategories.length === 0 && <option value="Free discussions">Free discussions</option>}
+                    {topicCategories.map(category => <option key={category} value={category}>{t(category)}</option>)}
+                    {topicCategories.length === 0 && <option value="Free discussions">{t('Free discussions')}</option>}
                   </select>
                 )}
                 {saveCategoryMode === 'custom' && (
@@ -442,13 +444,13 @@ export const ChatPage: React.FC<Props> = ({ user }) => {
                     value={customSaveCategory}
                     onChange={event => setCustomSaveCategory(event.target.value)}
                     maxLength={120}
-                    placeholder="New category name"
+                    placeholder={t('New category name')}
                     className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
                   />
                 )}
               </div>
             )}
-            <div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowClose(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">Cancel</button><button onClick={() => void discardSession()} disabled={busy} className="rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-40">Discard</button><button onClick={() => void finishSession()} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{busy ? 'Closing…' : 'Save & review'}</button></div>
+            <div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowClose(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">{t('Cancel')}</button><button onClick={() => void discardSession()} disabled={busy} className="rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-40">{t('Discard')}</button><button onClick={() => void finishSession()} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{busy ? t('Closing…') : t('Save & review')}</button></div>
           </div>
         </div>
       )}

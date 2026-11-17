@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ExerciseContent } from '../../../types';
 import { HintReveal } from './HintReveal';
+import { useI18n } from '../../../i18n';
 
 interface Props {
   content: ExerciseContent;
@@ -13,11 +14,12 @@ export const CorrectionExercise: React.FC<Props> = ({
   content, answers, onChange, disabled,
 }) => {
   const sentences = content.sentences ?? [];
+  const { t } = useI18n();
 
   return (
     <div className="space-y-5">
       <p className="text-xs text-slate-400">
-        Correct the full sentence and write the improved version in the text field.
+        {t('Correct the full sentence and write the improved version in the text field.')}
       </p>
       {sentences.map(s => (
         <div key={s.id} className="bg-slate-900 rounded-xl p-4 border border-slate-700">
@@ -37,13 +39,13 @@ export const CorrectionExercise: React.FC<Props> = ({
             value={answers[String(s.id)] ?? ''}
             onChange={e => onChange(String(s.id), e.target.value)}
             disabled={disabled}
-            placeholder="Correct sentence..."
+            placeholder={t('Correct sentence...')}
             rows={2}
             className="w-full bg-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500 disabled:opacity-60 resize-none transition-colors"
           />
 
           {s.error_type && (
-            <HintReveal label="Error type">
+            <HintReveal label={t('error type')}>
               {s.error_type}
             </HintReveal>
           )}

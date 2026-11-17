@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ExerciseContent } from '../../../types';
 import { clsx } from 'clsx';
+import { useI18n } from '../../../i18n';
 
 interface Props {
   content: ExerciseContent;
@@ -16,6 +17,7 @@ export const GenderChoiceExercise: React.FC<Props> = ({
   content, answers, correctAnswers, onChange, disabled,
 }) => {
   const items = content.items ?? [];
+  const { t } = useI18n();
 
   return (
     <div className="space-y-3">
@@ -46,7 +48,7 @@ export const GenderChoiceExercise: React.FC<Props> = ({
                 <div className="mt-1 text-xs text-slate-400">
                   {item.translation && <span>{item.translation}</span>}
                   {item.translation && item.plural && <span> · </span>}
-                  {item.plural && <span>plural: {item.plural}</span>}
+                  {item.plural && <span>{t('plural:')} {item.plural}</span>}
                 </div>
               )}
             </div>

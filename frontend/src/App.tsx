@@ -18,6 +18,7 @@ import { SessionReviewPage } from './components/Review/SessionReviewPage';
 import { createAuthProfile, getAuthMe, refreshAuthSession, setAuthTokenProvider, signIn, signUp } from './api';
 import type { SignUpProfile } from './api';
 import type { User } from './types';
+import { useI18n } from './i18n';
 
 const AUTH_TOKEN_KEY = 'german_auth_token';
 const REFRESH_TOKEN_KEY = 'german_refresh_token';
@@ -26,6 +27,7 @@ const AUTH_EXPIRES_AT_KEY = 'german_auth_expires_at';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { t } = useI18n();
 
   useEffect(() => {
     const clearStoredSession = () => {
@@ -143,7 +145,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl animate-pulse">Loading...</div>
+        <div className="text-white text-xl animate-pulse">{t('Loading...')}</div>
       </div>
     );
   }

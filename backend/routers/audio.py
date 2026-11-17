@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+from ui_language import localized
 from auth import CurrentUser, get_current_user
 from rate_limits import (
     AUDIO_SPEECH_PER_HOUR,
@@ -86,29 +87,59 @@ def _score_pronunciation(expected_text: str, transcribed_text: str) -> int:
 def _build_pronunciation_feedback(score: int, expected_text: str, transcribed_text: str) -> tuple[str, str]:
     if not transcribed_text.strip():
         return (
-            "I could not detect a clear German phrase in the recording.",
-            f"Say it once slowly, then once naturally: {expected_text}",
+            localized(
+                "I could not detect a clear German phrase in the recording.",
+                "Je n'ai pas pu détecter de phrase allemande claire dans l'enregistrement.",
+            ),
+            localized(
+                f"Say it once slowly, then once naturally: {expected_text}",
+                f"Dites-la une fois lentement, puis une fois naturellement : {expected_text}",
+            ),
         )
 
     if score >= 90:
         return (
-            "Very close. The spoken phrase was recognized almost exactly.",
-            "Repeat it at a natural speed while keeping the vowels clear.",
+            localized(
+                "Very close. The spoken phrase was recognized almost exactly.",
+                "Très proche. La phrase prononcée a été reconnue presque exactement.",
+            ),
+            localized(
+                "Repeat it at a natural speed while keeping the vowels clear.",
+                "Répétez-la à vitesse naturelle en gardant des voyelles bien nettes.",
+            ),
         )
     if score >= 70:
         return (
-            "Mostly understandable, but one or two sounds or syllables may be unclear.",
-            f"Break it into short chunks, then connect them again: {expected_text}",
+            localized(
+                "Mostly understandable, but one or two sounds or syllables may be unclear.",
+                "Globalement compréhensible, mais un ou deux sons ou syllabes manquent peut-être de netteté.",
+            ),
+            localized(
+                f"Break it into short chunks, then connect them again: {expected_text}",
+                f"Découpez-la en petits morceaux, puis enchaînez-les à nouveau : {expected_text}",
+            ),
         )
     if score >= 45:
         return (
-            "Partly recognized, but the phrase differs noticeably from the target.",
-            "Practice slowly first and pay attention to word endings and stressed syllables.",
+            localized(
+                "Partly recognized, but the phrase differs noticeably from the target.",
+                "Partiellement reconnue, mais la phrase diffère nettement de la cible.",
+            ),
+            localized(
+                "Practice slowly first and pay attention to word endings and stressed syllables.",
+                "Entraînez-vous d'abord lentement et soyez attentif aux terminaisons et aux syllabes accentuées.",
+            ),
         )
 
     return (
-        "The recording was not recognized as the expected phrase.",
-        f"Listen to the target audio, then repeat only this phrase: {expected_text}",
+        localized(
+            "The recording was not recognized as the expected phrase.",
+            "L'enregistrement n'a pas été reconnu comme la phrase attendue.",
+        ),
+        localized(
+            f"Listen to the target audio, then repeat only this phrase: {expected_text}",
+            f"Écoutez l'audio cible, puis répétez uniquement cette phrase : {expected_text}",
+        ),
     )
 
 

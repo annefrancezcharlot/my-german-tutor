@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { ExerciseContent } from '../../../types';
 import { clsx } from 'clsx';
 import { Check, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { useI18n } from '../../../i18n';
 
 interface Props {
   content: ExerciseContent;
@@ -27,6 +28,7 @@ const addAnswerVariant = (variants: Set<string>, value: string | string[] | unde
 export const VocabularyClozeExercise: React.FC<Props> = ({
   content, answers, correctAnswers, onChange, disabled,
 }) => {
+  const { t } = useI18n();
   const sourceText = content.source_text ?? '';
   const gaps = content.gaps ?? [];
   const wordBankEntries = useMemo(() => {
@@ -102,7 +104,7 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
           type="button"
           className="mr-1 rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-slate-950"
           onClick={() => toggleDefinition(Number(gapId))}
-          title="Show or hide definition"
+          title={t('Show or hide definition')}
         >
           {gapId}
         </button>
@@ -111,7 +113,7 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
           disabled={disabled}
           value={answers[gapId] ?? ''}
           onChange={e => onChange(gapId, e.target.value)}
-          placeholder="Enter word"
+          placeholder={t('Enter word')}
           className={clsx(
             'h-10 w-40 rounded-xl border px-3 py-2 text-sm font-medium transition-all focus:outline-none focus:ring-2',
             answers[gapId]
@@ -129,7 +131,8 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
             type="button"
             onClick={() => clearGap(gapId)}
             className="ml-1 rounded-full border border-slate-600 bg-slate-800 p-1 text-slate-400 transition-colors hover:border-slate-500 hover:text-white"
-            title="Clear field"
+            title={t('Clear field')}
+            aria-label={t('Clear field')}
           >
             <RotateCcw size={12} />
           </button>
@@ -143,18 +146,18 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
       <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
         <div className="mb-3 flex items-center gap-2 flex-wrap">
           <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-semibold text-orange-300">
-            Word bank
+            {t('Word bank')}
           </span>
           <span className="rounded-full bg-blue-900/40 px-2.5 py-1 text-xs font-semibold text-blue-300">
-            {content.topic_label ?? 'Vocabulary'}
+            {content.topic_label ?? t('Vocabulary')}
           </span>
           {content.preparation_use && (
             <span className="rounded-full bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-300">
-              Preparation
+              {t('Preparation')}
             </span>
           )}
           <span className="text-xs text-slate-400">
-            Type the matching word into each gap.
+            {t('Type the matching word into each gap.')}
           </span>
         </div>
 
@@ -171,7 +174,7 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
                     ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
                     : 'border-orange-400/40 bg-orange-500/10 text-orange-100',
                 )}
-                title={isUsed ? 'Already used' : 'Not used yet'}
+                title={isUsed ? t('Already used') : t('Not used yet')}
               >
                 {isUsed && <Check size={13} />}
                 <span className={clsx(isUsed && 'line-through decoration-emerald-300/70')}>
@@ -186,7 +189,7 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.8fr)_320px]">
         <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Text
+            {t('Text')}
           </div>
           <div className="text-base leading-8 text-slate-100">
             {parts.map(renderPart)}
@@ -194,7 +197,7 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
         </div>
 
         <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-          <div className="mb-3 text-sm font-semibold text-white">Hidden definitions</div>
+          <div className="mb-3 text-sm font-semibold text-white">{t('Hidden definitions')}</div>
           <div className="space-y-2">
             {gaps.map(gap => {
               const isRevealed = !!revealedDefinitions[String(gap.id)];
@@ -214,15 +217,15 @@ export const VocabularyClozeExercise: React.FC<Props> = ({
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
                     >
                       {isRevealed ? <EyeOff size={12} /> : <Eye size={12} />}
-                      {isRevealed ? 'Hide' : 'Show'}
+                      {isRevealed ? t('Hide') : t('Show')}
                     </button>
                   </div>
 
                   <div className="mt-2 text-xs leading-relaxed text-slate-300">
                     {isRevealed ? (
-                      gap.hint ?? 'No definition available'
+                      gap.hint ?? t('No definition available')
                     ) : (
-                      <span className="text-slate-500">Definition hidden</span>
+                      <span className="text-slate-500">{t('Definition hidden')}</span>
                     )}
                   </div>
                 </div>

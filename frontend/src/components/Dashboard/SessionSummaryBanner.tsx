@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Trophy } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useI18n } from '../../i18n';
 
 interface Props {
   summary: {
@@ -13,6 +14,7 @@ interface Props {
 
 export const SessionSummaryBanner: React.FC<Props> = ({ summary }) => {
   const [dismissed, setDismissed] = useState(false);
+  const { t } = useI18n();
   if (dismissed) return null;
 
   const score = Math.round(summary.score ?? 0);
@@ -24,6 +26,7 @@ export const SessionSummaryBanner: React.FC<Props> = ({ summary }) => {
     <div className="bg-gradient-to-r from-blue-900/60 to-indigo-900/60 border border-blue-700/50 rounded-2xl p-5 relative">
       <button
         onClick={() => setDismissed(true)}
+        aria-label={t('Close')}
         className="absolute top-3 right-3 text-slate-400 hover:text-white transition-colors"
       >
         <X size={16} />
@@ -33,18 +36,18 @@ export const SessionSummaryBanner: React.FC<Props> = ({ summary }) => {
         <div className="text-4xl shrink-0">🏁</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <h2 className="font-bold text-white text-lg">Conversation finished!</h2>
+            <h2 className="font-bold text-white text-lg">{t('Conversation finished!')}</h2>
             <div className="flex items-center gap-2 text-sm">
               <Trophy size={14} className={scoreColour} />
               <span className={clsx('font-bold text-lg', scoreColour)}>
-                {score} points
+                {t('{score} points', { score })}
               </span>
               <span className="text-slate-400">·</span>
-              <span className="text-amber-400">{summary.error_count} mistakes</span>
+              <span className="text-amber-400">{t('{count} mistakes', { count: summary.error_count })}</span>
               {summary.estimated_level && (
                 <>
                   <span className="text-slate-400">·</span>
-                  <span className="text-cyan-300">Estimated: {summary.estimated_level}</span>
+                  <span className="text-cyan-300">{t('Estimated: {level}', { level: summary.estimated_level })}</span>
                 </>
               )}
             </div>

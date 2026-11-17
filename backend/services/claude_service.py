@@ -10,6 +10,7 @@ import anthropic
 from dotenv import load_dotenv
 
 from services.gradio_swiss_service import rewrite_messages_to_swiss_german
+from ui_language import get_ui_language, ui_language_name
 
 env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(env_path)
@@ -43,6 +44,7 @@ class FlashcardProviderError(RuntimeError):
 # ── System prompts ──────────────────────────────────────────────────────────
 
 def _build_conversation_system_prompt(topic: str, level: str) -> str:
+    feedback_language = ui_language_name()
     return f"""You are an expert German language tutor in Switzerland having a conversation with an advanced learner (level {level}).
 
 **Topic:** {topic}
@@ -70,7 +72,7 @@ Classify the mistakes as light, medium and severe based on the following criteri
       "severity": "<one of: light|medium|severe>",
       "original": "<exact wrong phrase>",
       "corrected": "<correct version>",
-      "explanation": "<clear explanation in English, referencing the German grammar rule>"
+      "explanation": "<clear explanation in {feedback_language}, referencing the German grammar rule>"
     }}
   ]
 }}
@@ -82,8 +84,8 @@ Correction guidelines:
 
 Be thorough but encouraging – praise good structures too in your reply.
 For advanced learners: flag subtle style issues, register mismatches, and unnatural phrasing.
-Always reply in German. Corrections/explanations are in English.
-If the user writes in English, gently remind them to write in German."""
+Always reply in German. Corrections/explanations are in {feedback_language}.
+If the user writes in English or French, gently remind them to write in German."""
 
 
 def _build_opening_message_prompt(topic: str, level: str) -> str:
@@ -113,6 +115,7 @@ the learner's mistakes: teaching analysis is handled separately after the conver
 
 def _build_message_analysis_prompt(messages: List[Dict[str, Any]], level: str) -> str:
     payload = json.dumps(messages, ensure_ascii=False, indent=2)
+    feedback_language = ui_language_name()
     return f"""You are an expert German teacher analysing learner messages at CEFR level {level}.
 Analyse every message independently. Ignore capitalization, ordinary typos, and ss versus ß.
 Make minimal edits preserving valid wording and meaning. Correct only demonstrable errors.
@@ -126,9 +129,9 @@ Return ONLY valid JSON:
 "corrections": [{{"category": "grammar|vocabulary|word_order|case|gender|verb_conjugation|preposition|tense|punctuation|other",
 "subcategory": "specific rule or null", "severity": "light|medium|severe",
 "original": "exact unique substring of original message", "corrected": "minimal replacement",
-"explanation": "English explanation of the actual error and why this edit fixes it"}}],
+"explanation": "{feedback_language} explanation of the actual error and why this edit fixes it"}}],
 "suggestions": [{{"original": "exact unique substring of original message",
-"corrected": "optional alternative", "explanation": "English explanation identifying this as optional"}}]
+"corrected": "optional alternative", "explanation": "{feedback_language} explanation identifying this as optional"}}]
 }}]}}
 Return every numeric message_id exactly once. Use empty arrays when there is nothing to report.
 Each original must occur exactly once; include context to disambiguate repeated words.
@@ -354,6 +357,7 @@ def _build_session_summary_prompt(
         f"{m['role'].upper()}: {m['content']}" for m in messages[-20:]
     )
 
+    feedback_language = ui_language_name()
     return f"""Review this German conversation practice session on "{topic}" (configured learner level: {level}).
 LEARNER MESSAGES (last 20):
 {history_text}
@@ -363,7 +367,7 @@ ERRORS DETECTED:
 
 Return ONLY valid JSON in this format:
 {{
-  "summary": "<concise encouraging English summary, max 150 words>",
+  "summary": "<concise encouraging summary written in {feedback_language}, max 150 words>",
   "estimated_level": "<one of A1, A2, B1, B2, C1, C2>"
 }}
 
@@ -377,6 +381,7 @@ def _build_translation_prompt(
     source_language: str,
     target_language: str,
 ) -> str:
+    feedback_language = ui_language_name()
     return f"""You are a precise translation assistant inside a German learning app.
 Translate the text below for a German learner.
 
@@ -384,7 +389,7 @@ Source language preference: {source_language}
 Target language preference: {target_language}
 
 If target_language is "auto":
-- translate German text into English
+- translate German text into {feedback_language}
 - translate non-German text into natural German
 
 Return ONLY valid JSON in this exact format:
@@ -393,7 +398,7 @@ Return ONLY valid JSON in this exact format:
   "target_language": "<target language>",
   "translation": "<best translation>",
   "alternatives": ["<optional alternative 1>", "<optional alternative 2>"],
-  "notes": "<brief English note about register, case, gender, separable verb, or usage; empty string if not useful>"
+  "notes": "<brief {feedback_language} note about register, case, gender, separable verb, or usage; empty string if not useful>"
 }}
 
 Rules:
@@ -407,6 +412,7 @@ Text:
 
 
 def _build_teacher_rule_prompt(question: str, level: str) -> str:
+    feedback_language = ui_language_name()
     return f"""You are an expert German teacher for a learner at CEFR level {level}.
 Answer the learner's question and save it as a small reusable rule/explanation.
 
@@ -416,14 +422,14 @@ Learner question:
 Return ONLY valid JSON in this exact format:
 {{
   "category": "<one of: grammar|vocabulary|word_order|case|gender|verb_conjugation|preposition|tense|spelling|punctuation|style|pronunciation|other>",
-  "title": "<short rule title, max 70 characters>",
-  "short_answer": "<direct answer in English, 1-2 sentences>",
-  "explanation": "<clear reusable explanation in English, max 180 words>",
+  "title": "<short rule title in {feedback_language}, max 70 characters>",
+  "short_answer": "<direct answer in {feedback_language}, 1-2 sentences>",
+  "explanation": "<clear reusable explanation in {feedback_language}, max 180 words>",
   "examples": [
     {{
       "german": "<natural German example>",
-      "english": "<English meaning>",
-      "note": "<short note about the rule>"
+      "english": "<{feedback_language} meaning>",
+      "note": "<short {feedback_language} note about the rule>"
     }}
   ],
   "related_terms": ["<short German term or grammar label>"]
@@ -595,6 +601,7 @@ def _build_style_rewrite_prompt(
         STYLE_MODE_INSTRUCTIONS["natural"],
     )
 
+    feedback_language = ui_language_name()
     return f"""You are an expert German style coach for a learner at level {level}.
 Rewrite the learner's German messages from this conversation on "{topic}" so they sound more natural, idiomatic, and precise.
 
@@ -609,7 +616,7 @@ Rules:
 - For Swiss German rewrite modes, write the rewritten text in natural Swiss German dialect.
 - Return one rewrite for every learner message.
 - Keep message_id as the exact numeric ID from the input.
-- Notes must be in English.
+- Notes must be in {feedback_language}.
 - Return ONLY valid JSON.
 
 Learner messages:
@@ -622,7 +629,7 @@ Return JSON in this exact format:
       "message_id": 123,
       "original": "<original learner message>",
       "rewritten": "<more natural German version>",
-      "style_notes": "<brief English note explaining what improved>",
+      "style_notes": "<brief {feedback_language} note explaining what improved>",
       "register": "<neutral|formal|informal|academic|professional>"
     }}
   ]
@@ -635,6 +642,7 @@ def _build_resource_questions_prompt(
     question_count: int,
 ) -> str:
     resource_text = json.dumps(resource, ensure_ascii=False, indent=2)
+    feedback_language = ui_language_name()
 
     return f"""You are an expert German tutor.
 Create questions for a learner at level {level} based on this German learning resource.
@@ -650,7 +658,7 @@ Return ONLY valid JSON in this exact format:
       "id": 1,
       "type": "<comprehension|vocabulary|opinion|grammar>",
       "question": "<question in German>",
-      "hint": "<short English hint>",
+      "hint": "<short {feedback_language} hint>",
       "model_answer": "<short model answer in German>"
     }}
   ]
@@ -659,7 +667,7 @@ Return ONLY valid JSON in this exact format:
 Rules:
 - Generate exactly {question_count} questions.
 - Questions must be in German.
-- Hints may be in English.
+- Hints must be in {feedback_language}.
 - Include a mix of comprehension, vocabulary, and opinion questions.
 - If the resource does not contain a full transcript, ask questions that can be answered after watching/listening/reading the linked resource and from the provided description/excerpt."""
 

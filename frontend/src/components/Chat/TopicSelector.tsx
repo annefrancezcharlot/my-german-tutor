@@ -4,6 +4,7 @@ import { getFreeConversationTopics, getTopics } from '../../api';
 import type { User, Topic, ConversationStarter, SelectedConversation, RecentFreeTopic } from '../../types';
 import { ChevronDown, Dice5, Loader2, MessageSquare } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useI18n } from '../../i18n';
 
 interface Props { user: User; }
 
@@ -16,6 +17,7 @@ const cleanFreeConversationTitle = (title: string) => {
 
 export const TopicSelector: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const location = useLocation();
   const routeState = (location.state as { freeTopic?: string; freeTopicDescription?: string } | null) ?? {};
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -137,8 +139,8 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white sm:text-3xl">Choose a topic</h1>
-          <p className="mt-2 text-sm text-slate-400">Start with your own idea or browse saved topics.</p>
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">{t('Choose a topic')}</h1>
+          <p className="mt-2 text-sm text-slate-400">{t('Start with your own idea or browse saved topics.')}</p>
         </div>
         <button
           type="button"
@@ -147,7 +149,7 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
           className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {starting === '__random-topic__' ? <Loader2 size={16} className="animate-spin" /> : <Dice5 size={16} />}
-          Random topic
+          {t('Random topic')}
         </button>
       </div>
 
@@ -160,7 +162,7 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
             id="conversation-topic"
             value={freeTopic}
             onChange={event => setFreeTopic(event.target.value)}
-            placeholder="What would you like to talk about?"
+            placeholder={t('What would you like to talk about?')}
             className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
           <button
@@ -168,27 +170,27 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
             disabled={!freeTopic.trim()}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <MessageSquare size={16} /> Start conversation
+            <MessageSquare size={16} /> {t('Start conversation')}
           </button>
         </div>
       </form>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex items-center gap-3">
-          <label htmlFor="topic-category" className="text-sm text-slate-400"></label>
+          <label htmlFor="topic-category" className="sr-only">{t('Category')}</label>
           <select
             id="topic-category"
             value={activeCategory}
             onChange={event => { setActiveCategory(event.target.value); setExpandedTopicId(null); }}
             className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:max-w-64"
           >
-            {categories.map(category => <option key={category} value={category}>{category === 'All' ? 'All categories' : category}</option>)}
+            {categories.map(category => <option key={category} value={category}>{category === 'All' ? t('All categories') : t(category)}</option>)}
           </select>
         </div>
       </div>
 
       {savedTopicGroups.length === 0 && filtered.length === 0 && (
-        <p className="py-8 text-sm text-slate-400">No saved prompts in this category yet. Start a conversation with your own topic above.</p>
+        <p className="py-8 text-sm text-slate-400">{t('No saved prompts in this category yet. Start a conversation with your own topic above.')}</p>
       )}
       <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
         {savedTopicGroups.map(([category, items]) => {
@@ -204,8 +206,8 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
                   className="flex w-full items-center justify-between gap-4 p-5 text-left transition-colors hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
                 >
                   <span className="min-w-0">
-                    <span className="block break-words text-base font-semibold text-white">{category}</span>
-                    <span className="mt-1 block text-sm font-normal text-slate-400">{items.length} saved {items.length === 1 ? 'prompt' : 'prompts'}</span>
+                    <span className="block break-words text-base font-semibold text-white">{t(category)}</span>
+                    <span className="mt-1 block text-sm font-normal text-slate-400">{items.length === 1 ? t('1 saved prompt') : t('{count} saved prompts', { count: items.length })}</span>
                   </span>
                   <ChevronDown size={18} className={clsx('shrink-0 text-slate-400 transition-transform', expanded && 'rotate-180')} />
                 </button>
@@ -237,22 +239,22 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
                   className="flex w-full items-center justify-between gap-4 p-5 text-left transition-colors hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
                 >
                   <span className="min-w-0">
-                    <span className="block break-words text-base font-semibold text-white">{topic.title}</span>
-                    <span className="mt-1 block text-sm font-normal text-slate-400">{topic.conversation_starters.length} saved {topic.conversation_starters.length === 1 ? 'prompt' : 'prompts'}</span>
+                    <span className="block break-words text-base font-semibold text-white">{t(topic.title)}</span>
+                    <span className="mt-1 block text-sm font-normal text-slate-400">{topic.conversation_starters.length === 1 ? t('1 saved prompt') : t('{count} saved prompts', { count: topic.conversation_starters.length })}</span>
                   </span>
                   <ChevronDown size={18} className={clsx('shrink-0 text-slate-400 transition-transform', expanded && 'rotate-180')} />
                 </button>
               </h3>
               {expanded && (
                 <div className="mx-5 space-y-2 border-t border-slate-700/60 py-4">
-                  <p className="mb-3 text-sm text-slate-400">{topic.description}</p>
+                  <p className="mb-3 text-sm text-slate-400">{t(topic.description)}</p>
                   <button
                     type="button"
                     onClick={() => handleStart(topic, pickRandomStarter(topic), `${topic.id}::random`)}
                     disabled={loading || topic.conversation_starters.length === 0}
                     className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700/50 disabled:opacity-50"
                   >
-                    <Dice5 size={16} /> Random prompt
+                    <Dice5 size={16} /> {t('Random prompt')}
                   </button>
                   {topic.conversation_starters.map(starter => (
                     <button
@@ -263,7 +265,7 @@ export const TopicSelector: React.FC<Props> = ({ user }) => {
                       className="flex w-full items-start gap-2 rounded-lg p-3 text-left text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700/50 hover:text-white disabled:opacity-50"
                     >
                       <MessageSquare size={15} className="mt-0.5 shrink-0 text-slate-400" />
-                      {starter.title}
+                      {t(starter.title)}
                     </button>
                   ))}
                 </div>

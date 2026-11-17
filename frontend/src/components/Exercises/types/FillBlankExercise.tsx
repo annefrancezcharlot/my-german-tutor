@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ExerciseContent } from '../../../types';
+import { useI18n } from '../../../i18n';
 
 interface Props {
   content: ExerciseContent;
@@ -12,6 +13,7 @@ export const FillBlankExercise: React.FC<Props> = ({
   content, answers, onChange, disabled,
 }) => {
   const sentences = content.sentences ?? [];
+  const { t } = useI18n();
 
   return (
     <div className="space-y-5">
@@ -31,12 +33,12 @@ export const FillBlankExercise: React.FC<Props> = ({
               <div className="mb-3 flex flex-wrap gap-2 text-xs">
                 {s.word && (
                   <span className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-2.5 py-1 text-blue-100">
-                    Word: <strong>{s.word}</strong>
+                    {t('Word:')} <strong>{s.word}</strong>
                   </span>
                 )}
                 {s.answer_scope && (
                   <span className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1 text-slate-200">
-                    Enter: <strong>{s.answer_scope === 'article_only' ? 'article only' : 'complete phrase'}</strong>
+                    {t('Enter:')} <strong>{s.answer_scope === 'article_only' ? t('article only') : t('complete phrase')}</strong>
                   </span>
                 )}
               </div>

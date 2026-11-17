@@ -4,6 +4,7 @@ import {
   reportRealtimeUsage,
 } from '../api';
 import type { Message } from '../types';
+import { tr } from '../i18n';
 
 export type RealtimeState = 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 
@@ -163,7 +164,7 @@ export class RealtimeDiscussion {
   private failAndStop(message: string) {
     if (this.stopped) return;
     this.stop();
-    this.callbacks.onError(message);
+    this.callbacks.onError(tr(message));
   }
 
   private enqueueTranscript(role: 'user' | 'assistant', content: string) {
@@ -184,7 +185,7 @@ export class RealtimeDiscussion {
       }
       throw lastError;
     }).catch(() => {
-      this.callbacks.onError('A transcript turn could not be saved after three attempts.');
+      this.callbacks.onError(tr('A transcript turn could not be saved after three attempts.'));
     });
   }
 

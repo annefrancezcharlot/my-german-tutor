@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { tr } from '../../i18n';
 
 export const MAX_FLASHCARD_TERMS = 30;
 
@@ -26,5 +27,5 @@ export const flashcardRequestErrorMessage = (error: unknown, fallback: string): 
 };
 
 export const flashcardGenerationErrorMessage = (error: unknown): string => (
-  flashcardRequestErrorMessage(error, 'Flashcard set could not be generated.')
+  flashcardRequestErrorMessage(error, tr('Flashcard set could not be generated.'))
 );

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Languages, Loader2, X } from 'lucide-react';
 import { translateText } from '../../api';
 import type { TranslationResponse, TranslationTarget } from '../../types';
+import { useI18n } from '../../i18n';
 
 const targetOptions: Array<{ value: TranslationTarget; label: string }> = [
   { value: 'auto', label: 'Auto' },
@@ -16,6 +17,7 @@ interface Props {
 
 export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   const [text, setText] = useState('');
   const [targetLanguage, setTargetLanguage] = useState<TranslationTarget>('auto');
   const [result, setResult] = useState<TranslationResponse | null>(null);
@@ -49,7 +51,7 @@ export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
     try {
       setResult(await translateText(trimmed, targetLanguage));
     } catch {
-      setError('Translation could not be loaded.');
+      setError(t('Translation could not be loaded.'));
     } finally {
       setLoading(false);
     }
@@ -68,24 +70,25 @@ export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
         type="button"
         onClick={() => setOpen(prev => !prev)}
         className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white ${fullWidth ? 'w-full justify-start' : ''}`}
-        title="Translate"
+        title={t('Translate')}
       >
         <Languages size={18} />
-        <span className={fullWidth ? '' : 'hidden lg:inline'}>Translate</span>
+        <span className={fullWidth ? '' : 'hidden lg:inline'}>{t('Translate')}</span>
       </button>
 
       {open && (
         <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(22rem,calc(100vw-2rem))]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-white">Quick translate</h2>
-              <p className="text-xs text-slate-400">German ↔ English automatically</p>
+              <h2 className="text-sm font-semibold text-white">{t('Quick translate')}</h2>
+              <p className="text-xs text-slate-400">{t('German ↔ English automatically')}</p>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-              title="Close"
+              title={t('Close')}
+              aria-label={t('Close')}
             >
               <X size={16} />
             </button>
@@ -99,7 +102,7 @@ export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
               onKeyDown={handleKeyDown}
               rows={3}
               maxLength={1200}
-              placeholder="Word or sentence..."
+              placeholder={t('Word or sentence...')}
               className="w-full resize-none rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500"
             />
 
@@ -111,7 +114,7 @@ export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
               >
                 {targetOptions.map(option => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </select>
@@ -122,7 +125,7 @@ export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Languages size={16} />}
-                Translate
+                {t('Translate')}
               </button>
             </div>
           </div>
@@ -136,7 +139,7 @@ export const GlobalTranslator: React.FC<Props> = ({ fullWidth = false }) => {
           {result && (
             <div className="mt-4 space-y-3 rounded-lg border border-slate-700 bg-slate-900 p-3">
               <div className="text-xs font-semibold uppercase text-blue-300">
-                {result.source_language ?? 'Auto'} → {result.target_language ?? targetLanguage}
+                {result.source_language ?? t('Auto')} → {result.target_language ?? targetLanguage}
               </div>
               <div className="text-base font-semibold leading-relaxed text-white">
                 {result.translation}

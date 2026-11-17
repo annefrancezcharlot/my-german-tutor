@@ -2,6 +2,7 @@ import React from 'react';
 import type { ExerciseContent, ExerciseResult } from '../../types';
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useI18n } from '../../i18n';
 
 interface Props {
   result: ExerciseResult;
@@ -12,6 +13,23 @@ interface Props {
 
 const extractItemId = (feedback: string, index: number): string =>
   feedback.match(/Item\s+(\d+)/)?.[1] ?? String(index + 1);
+
+// The backend scores in English ("Item 3: Correct!"); translate the known phrases for display.
+const FEEDBACK_MESSAGES: Record<string, string> = {
+  'Correct!': 'Item {id}: Correct!',
+  'Incorrect.': 'Item {id}: Incorrect.',
+  'Not quite correct.': 'Item {id}: Not quite correct.',
+};
+
+const localizeFeedback = (
+  feedback: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string => {
+  const text = feedback.replace(/^[✓✗~]\s*/, '');
+  const match = text.match(/^Item\s+(\d+):\s*(.+)$/);
+  const key = match ? FEEDBACK_MESSAGES[match[2].trim()] : undefined;
+  return match && key ? t(key, { id: match[1] }) : text;
+};
 
 const stripOptionLabel = (option: string): string =>
   option.replace(/^[A-Z]\)\s*/, '');
@@ -114,6 +132,7 @@ const vocabularyAnswerVariants = (
 };
 
 export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, content }) => {
+  const { t } = useI18n();
   const score = Math.round(result.score);
   const isPerfect  = score === 100;
   const isGood     = score >= 70;
@@ -125,10 +144,10 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
 
   const emoji  = isPerfect ? '🎉' : isGood ? '👍' : '💪';
   const phrase = isPerfect
-    ? 'Perfect! All answers are correct.'
+    ? t('Perfect! All answers are correct.')
     : isGood
-    ? 'Good work! A few small mistakes.'
-    : 'Keep practicing. You can do this.';
+    ? t('Good work! A few small mistakes.')
+    : t('Keep practicing. You can do this.');
 
   const renderVocabularyResults = () => {
     const parts = (content.source_text ?? '').split(/(\[\d+\])/g);
@@ -168,12 +187,12 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
     return (
       <div>
         <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wide">
-          Correction
+          {t('Correction')}
         </h3>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Filled text
+              {t('Filled text')}
             </div>
             <div className="text-base leading-8 text-slate-100">
               {parts.map(renderFilledTextPart)}
@@ -182,7 +201,7 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
 
           <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Your answers
+              {t('Your answers')}
             </div>
             <div className="space-y-2">
               {gaps.map(gap => {
@@ -217,7 +236,7 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
                         </div>
                         {!isCorrect && correctAnswer !== undefined && (
                           <div className="mt-1 text-xs text-slate-300">
-                            Correct: <span className="font-medium text-white">{correctAnswerText}</span>
+                            {t('Correct:')} <span className="font-medium text-white">{correctAnswerText}</span>
                           </div>
                         )}
                       </div>
@@ -246,7 +265,7 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
       {exerciseType === 'vocabulary_cloze' ? renderVocabularyResults() : (
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wide">
-            Detailed feedback
+            {t('Detailed feedback')}
           </h3>
           <div className="space-y-2">
             {result.feedback.map((fb, idx) => {
@@ -289,16 +308,16 @@ export const ResultView: React.FC<Props> = ({ result, exerciseType, answers, con
                     isCorrect ? 'text-green-200' :
                     isPartial ? 'text-yellow-200' : 'text-red-200'
                   )}>
-                    <div>{fb.replace(/^[✓✗~]\s*/, '')}</div>
+                    <div>{localizeFeedback(fb, t)}</div>
                     {correctAnswer !== undefined && (
                       <div className="mt-2 space-y-1 text-xs">
                         {userAnswer !== undefined && (
                           <div className="text-slate-300">
-                            Your answer: <span className="font-medium text-white">{displayedUserAnswer}</span>
+                            {t('Your answer:')} <span className="font-medium text-white">{displayedUserAnswer}</span>
                           </div>
                         )}
                         <div className="text-slate-300">
-                          Correct answer: <span className="font-medium text-white">{displayedCorrectAnswer}</span>
+                          {t('Correct answer:')} <span className="font-medium text-white">{displayedCorrectAnswer}</span>
                         </div>
                       </div>
                     )}

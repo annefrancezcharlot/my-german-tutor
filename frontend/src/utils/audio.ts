@@ -1,4 +1,5 @@
 import { createSpeechAudioUrl, createSpeechStream } from '../api';
+import { tr } from '../i18n';
 
 export type RecordingResult = {
   blob: Blob;
@@ -28,10 +29,10 @@ export const createMediaRecorder = async (): Promise<{
   mimeType: string;
 }> => {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Audio recording is not supported in this browser.');
+    throw new Error(tr('Audio recording is not supported in this browser.'));
   }
   if (typeof MediaRecorder === 'undefined') {
-    throw new Error('Audio recording is not supported in this browser.');
+    throw new Error(tr('Audio recording is not supported in this browser.'));
   }
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });

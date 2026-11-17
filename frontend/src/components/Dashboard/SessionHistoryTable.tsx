@@ -3,22 +3,24 @@ import type { ConversationSession } from '../../types';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
+import { useI18n } from '../../i18n';
 
 interface Props { sessions: ConversationSession[]; onDelete: (id: number) => Promise<void>; }
 
 export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => {
   const [expanded, setExpanded] = useState<number | null>(null);
+  const { t } = useI18n();
 
   const [deleting, setDeleting] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const remove = async (session: ConversationSession) => {
-    if (!window.confirm(`Delete conversation “${session.topic}”? Its messages and review will be permanently removed.`)) return;
+    if (!window.confirm(t('Delete conversation “{topic}”? Its messages and review will be permanently removed.', { topic: session.topic }))) return;
     setDeleting(session.id);
     setDeleteError(null);
     try {
       await onDelete(session.id);
     } catch {
-      setDeleteError('The conversation could not be deleted. Please try again.');
+      setDeleteError(t('The conversation could not be deleted. Please try again.'));
     } finally {
       setDeleting(null);
     }
@@ -43,13 +45,13 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => 
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-slate-400 border-b border-slate-700">
-            <th className="pb-2 pr-4 font-medium">Date</th>
-            <th className="pb-2 pr-4 font-medium">Topic</th>
-            <th className="pb-2 pr-4 font-medium text-center">Level</th>
-            <th className="pb-2 pr-4 font-medium text-center">Messages</th>
-            <th className="pb-2 pr-4 font-medium text-center">Mistakes</th>
-            <th className="pb-2 font-medium text-center">Score</th>
-            <th className="pb-2 pl-3 font-medium">Actions</th>
+            <th className="pb-2 pr-4 font-medium">{t('Date')}</th>
+            <th className="pb-2 pr-4 font-medium">{t('Topic')}</th>
+            <th className="pb-2 pr-4 font-medium text-center">{t('Level')}</th>
+            <th className="pb-2 pr-4 font-medium text-center">{t('Messages')}</th>
+            <th className="pb-2 pr-4 font-medium text-center">{t('Mistakes')}</th>
+            <th className="pb-2 font-medium text-center">{t('Score')}</th>
+            <th className="pb-2 pl-3 font-medium">{t('Actions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700/50">
@@ -65,7 +67,7 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => 
                 <td className="py-3 pr-4 text-white font-medium max-w-[200px] truncate">
                   {s.topic}
                   <span className="ml-2 text-xs text-slate-500">
-                    {s.topic_category}
+                    {s.topic_category ? t(s.topic_category) : null}
                   </span>
                 </td>
                 <td className="py-3 pr-4 text-center text-cyan-300 font-semibold">
@@ -83,7 +85,7 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => 
                   </span>
                   <span
                     className="ml-1.5 text-slate-500 inline-block"
-                    aria-label="Toggle summary"
+                    aria-label={t('Toggle summary')}
                   >
                     {expanded === s.id
                       ? <ChevronUp size={13} className="inline" />
@@ -92,10 +94,10 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => 
                 </td>
                 <td className="py-3 pl-3">
                   <button type="button" disabled={deleting !== null}
-                    aria-label={`Delete conversation: ${s.topic}`}
+                    aria-label={t('Delete conversation: {topic}', { topic: s.topic })}
                     onClick={event => { event.stopPropagation(); void remove(s); }}
                     className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-red-300 hover:bg-red-950/50 disabled:opacity-50">
-                    <Trash2 size={16} />{deleting === s.id ? 'Deleting…' : 'Delete'}
+                    <Trash2 size={16} />{deleting === s.id ? t('Deleting…') : t('Delete')}
                   </button>
                 </td>
               </tr>
@@ -109,16 +111,16 @@ export const SessionHistoryTable: React.FC<Props> = ({ sessions, onDelete }) => 
                   >
                     <div className="bg-slate-900 rounded-xl p-4 text-xs text-slate-300 leading-relaxed border border-slate-700">
                       <div className="text-slate-400 font-semibold mb-1 uppercase tracking-wide text-[10px]">
-                        Session summary
+                        {t('Session summary')}
                       </div>
-                      {s.summary ?? 'Detailed feedback is still being prepared.'}
+                      {s.summary ?? t('Detailed feedback is still being prepared.')}
                       <div className="mt-3">
                         <Link
                           to={`/sessions/${s.id}/review`}
                           className="text-cyan-300 hover:text-cyan-200"
                           onClick={event => event.stopPropagation()}
                         >
-                          Open detailed review →
+                          {t('Open detailed review →')}
                         </Link>
                       </div>
                     </div>

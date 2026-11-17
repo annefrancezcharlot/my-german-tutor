@@ -2,6 +2,7 @@ import React from 'react';
 import type { ExerciseContent } from '../../../types';
 import { clsx } from 'clsx';
 import { HintReveal } from './HintReveal';
+import { useI18n } from '../../../i18n';
 
 interface Props {
   content: ExerciseContent;
@@ -13,6 +14,7 @@ interface Props {
 export const MultipleChoiceExercise: React.FC<Props> = ({
   content, answers, onChange, disabled,
 }) => {
+  const { t } = useI18n();
   const questions = content.questions ?? [];
 
   return (
@@ -54,7 +56,7 @@ export const MultipleChoiceExercise: React.FC<Props> = ({
           </div>
 
           {q.context && (
-            <HintReveal label="Context">
+            <HintReveal label={t('context')}>
               {q.context}
             </HintReveal>
           )}

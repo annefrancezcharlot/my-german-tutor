@@ -3,6 +3,7 @@ import type { Exercise } from '../../types';
 import { ERROR_CATEGORY_COLORS, EXERCISE_CATEGORY_LABELS } from '../../types';
 import { CheckCircle2, Clock, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useI18n } from '../../i18n';
 
 interface Props {
   exercise: Exercise;
@@ -24,11 +25,12 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export const ExerciseCard: React.FC<Props> = ({ exercise, onClick }) => {
+  const { t } = useI18n();
   const catColor = ERROR_CATEGORY_COLORS[exercise.error_category] || '#6b7280';
-  const catLabel = EXERCISE_CATEGORY_LABELS[exercise.error_category] || exercise.error_category;
+  const catLabel = t(EXERCISE_CATEGORY_LABELS[exercise.error_category] || exercise.error_category);
   const isGenderChoice = exercise.exercise_type === 'multiple_choice' && !!exercise.content.items?.length;
   const typeIcon = isGenderChoice ? '⚥' : TYPE_ICONS[exercise.exercise_type] ?? '📄';
-  const typeLabel = isGenderChoice ? 'Gender choice' : TYPE_LABELS[exercise.exercise_type];
+  const typeLabel = t(isGenderChoice ? 'Gender choice' : TYPE_LABELS[exercise.exercise_type] ?? exercise.exercise_type);
 
   const scoreColour = (s: number) =>
     s >= 80 ? 'text-green-400' : s >= 60 ? 'text-yellow-400' : 'text-red-400';

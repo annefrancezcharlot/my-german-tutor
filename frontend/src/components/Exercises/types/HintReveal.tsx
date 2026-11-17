@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { useI18n } from '../../../i18n';
 
 interface Props {
   label: string;
@@ -8,6 +9,7 @@ interface Props {
 
 export const HintReveal: React.FC<Props> = ({ label, children }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useI18n();
 
   return (
     <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-3">
@@ -17,7 +19,7 @@ export const HintReveal: React.FC<Props> = ({ label, children }) => {
         className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-white"
       >
         {isOpen ? <EyeOff size={13} /> : <Eye size={13} />}
-        {isOpen ? `${label} verbergen` : `${label} anzeigen`}
+        {isOpen ? t('Hide {label}', { label }) : t('Show {label}', { label })}
       </button>
 
       {isOpen && (
